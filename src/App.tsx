@@ -1863,12 +1863,20 @@ export default function App() {
       return;
     }
 
-    const isTargetAdmin = targetUser.role?.toLowerCase() === 'admin' || targetUser.role?.toLowerCase() === 'administrador';
+    const isTargetGeneralAdmin = targetUser.role?.toLowerCase() === 'administrador geral' || targetUser.username.toLowerCase() === 'samuellsilvva02';
+    const isTargetStandardAdmin = !isTargetGeneralAdmin && (targetUser.role?.toLowerCase() === 'admin' || targetUser.role?.toLowerCase() === 'administrador');
+    const isTargetAnyAdmin = isTargetGeneralAdmin || isTargetStandardAdmin;
 
-    // Allow admins to manage non-superadmin users
-    if (isTargetAdmin && !isSuperAdmin && targetUser.username.toLowerCase() !== currentUser?.username?.toLowerCase()) {
-      showAlert('Apenas o Administrador Supremo pode gerenciar outros administradores.', 'PERMISSÃO NEGADA', 'error');
-      return;
+    // Proteção de Hierarquia
+    if (isTargetAnyAdmin && targetUser.username.toLowerCase() !== currentUser?.username?.toLowerCase()) {
+      if (isTargetGeneralAdmin && !isSuperAdmin) {
+        showAlert('Apenas o Administrador Supremo pode gerenciar outros administradores gerais.', 'PERMISSÃO NEGADA', 'error');
+        return;
+      }
+      if (isTargetStandardAdmin && !isGeneralAdmin) {
+        showAlert('Apenas o Administrador Geral ou Supremo pode gerenciar administradores.', 'PERMISSÃO NEGADA', 'error');
+        return;
+      }
     }
 
     try {
@@ -3635,7 +3643,8 @@ export default function App() {
                   filteredMembers.map((member) => {
                     const isSelf = member.username.toLowerCase() === currentUser?.username?.toLowerCase();
                     const isSuperAdminAccount = member.username.toLowerCase() === 'samuellsilvva02';
-                    const isTargetAdmin = member.role?.toLowerCase() === 'admin' || member.role?.toLowerCase() === 'administrador';
+                    const isTargetGeneralAdmin = member.role?.toLowerCase() === 'administrador geral' || isSuperAdminAccount;
+                    const isTargetStandardAdmin = !isTargetGeneralAdmin && (member.role?.toLowerCase() === 'admin' || member.role?.toLowerCase() === 'administrador');
                     const isMenuOpen = openMemberMenuUsername === member.username;
 
                     return (
@@ -3644,10 +3653,10 @@ export default function App() {
                         className={`bg-black/80 border p-3 rounded-sm flex items-center justify-between gap-3 transition-all relative ${
                           member.isBanned
                             ? 'border-red-900/50 bg-red-950/10'
-                            : isSuperAdminAccount
-                            ? 'border-fuchsia-900/60 bg-fuchsia-950/10'
-                            : isTargetAdmin
-                            ? 'border-emerald-700/60 bg-emerald-950/20'
+                            : isTargetGeneralAdmin
+                            ? 'border-fuchsia-700/60 bg-fuchsia-950/20'
+                            : isTargetStandardAdmin
+                            ? 'border-red-700/60 bg-red-950/20'
                             : 'border-emerald-900/40 hover:border-emerald-700/60'
                         }`}
                       >
@@ -3655,10 +3664,10 @@ export default function App() {
                           <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shrink-0 ${
                             member.isBanned
                               ? 'bg-red-950 text-red-400 border border-red-800'
-                              : isSuperAdminAccount
+                              : isTargetGeneralAdmin
                               ? 'bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800'
-                              : isTargetAdmin
-                              ? 'bg-emerald-900 text-emerald-300 border border-emerald-700'
+                              : isTargetStandardAdmin
+                              ? 'bg-red-900 text-red-300 border border-red-700'
                               : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                           }`}>
                             {member.name ? member.name.charAt(0).toUpperCase() : '?'}
@@ -3672,8 +3681,13 @@ export default function App() {
                                   VOCÊ
                                 </span>
                               )}
-                              {isTargetAdmin && (
-                                <span className="bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                              {isTargetGeneralAdmin && (
+                                <span className="bg-gradient-to-r from-fuchsia-900 to-purple-900 text-fuchsia-100 border border-fuchsia-500 text-[9px] font-black px-1.5 py-0.5 rounded flex items-center gap-0.5 shadow-[0_0_10px_rgba(217,70,239,0.3)]">
+                                  GERAL
+                                </span>
+                              )}
+                              {isTargetStandardAdmin && (
+                                <span className="bg-red-950 text-red-300 border border-red-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
                                   ADMIN
                                 </span>
                               )}
@@ -3726,27 +3740,31 @@ export default function App() {
 
                                   {isGeneralAdmin && (
                                     <>
-                                      <button
-                                        onClick={() => {
-                                          setOpenMemberMenuUsername(null);
-                                          handleAdminActionById('makeAdmin', member.id || member.shortId || member.username);
-                                        }}
-                                        className="w-full text-left px-2.5 py-1.5 rounded flex items-center gap-2 font-bold hover:bg-red-950/60 text-red-300"
-                                      >
-                                        <Shield className="w-3.5 h-3.5 text-red-400" />
-                                        <span>Tornar Administrador</span>
-                                      </button>
-                                      <button
-                                        onClick={() => {
-                                          setOpenMemberMenuUsername(null);
-                                          handleAdminActionById('makeGeneralAdmin', member.id || member.shortId || member.username);
-                                        }}
-                                        className="w-full text-left px-2.5 py-1.5 rounded flex items-center gap-2 font-bold hover:bg-fuchsia-950/60 text-fuchsia-300"
-                                      >
-                                        <Crown className="w-3.5 h-3.5 text-fuchsia-400" />
-                                        <span>Tornar Administrador Geral</span>
-                                      </button>
-                                      {isTargetAdmin && (
+                                      {!isTargetStandardAdmin && (
+                                        <button
+                                          onClick={() => {
+                                            setOpenMemberMenuUsername(null);
+                                            handleAdminActionById('makeAdmin', member.id || member.shortId || member.username);
+                                          }}
+                                          className="w-full text-left px-2.5 py-1.5 rounded flex items-center gap-2 font-bold hover:bg-red-950/60 text-red-300"
+                                        >
+                                          <Shield className="w-3.5 h-3.5 text-red-400" />
+                                          <span>Tornar Administrador</span>
+                                        </button>
+                                      )}
+                                      {!isTargetGeneralAdmin && (
+                                        <button
+                                          onClick={() => {
+                                            setOpenMemberMenuUsername(null);
+                                            handleAdminActionById('makeGeneralAdmin', member.id || member.shortId || member.username);
+                                          }}
+                                          className="w-full text-left px-2.5 py-1.5 rounded flex items-center gap-2 font-bold hover:bg-fuchsia-950/60 text-fuchsia-300"
+                                        >
+                                          <Crown className="w-3.5 h-3.5 text-fuchsia-400" />
+                                          <span>Tornar Administrador Geral</span>
+                                        </button>
+                                      )}
+                                      {(isTargetStandardAdmin || (isTargetGeneralAdmin && isSuperAdmin)) && (
                                         <button
                                           onClick={() => {
                                             setOpenMemberMenuUsername(null);
