@@ -27,3 +27,7 @@
 .animate-luxury-glow {
   animation: luxury-glow 2s infinite ease-in-out;
 }
+html { zoom: 90%; }
+html {
+  zoom: 90%;
+}

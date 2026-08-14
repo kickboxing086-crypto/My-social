@@ -265,6 +265,18 @@ const formatTimestamp = (ts: any) => {
     return '';
   }
 };
+const renderTextWithLinks = (text: string) => {
+  if (!text) return null;
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
+  const parts = text.split(urlRegex);
+  return parts.map((part, i) => {
+    if (part.match(urlRegex)) {
+      const href = part.startsWith("http") ? part : `https://${part}`;
+      return <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">{part}</a>;
+    }
+    return <span key={i}>{part}</span>;
+  });
+};
 
 export default function App() {
 
@@ -2026,6 +2038,18 @@ export default function App() {
         await updateDoc(userDocRef, { role: 'Membro' });
         setAllMembers(prev => prev.map(m => m.username.toLowerCase() === targetUser.username.toLowerCase() ? { ...m, role: 'Membro' } : m));
         showAlert(`Cargo de administrador removido de @${targetUser.username}.`, 'AÇÃO CONCLUÍDA', 'success');
+      } else if (actionType === 'deleteAccount') {
+        if (!isGeneralAdmin) {
+          showAlert('Apenas o Administrador Geral pode apagar contas.', 'PERMISSÃO NEGADA', 'error');
+          return;
+        }
+        if (targetUser.username.toLowerCase() === 'samuellsilvva02') {
+          showAlert('A conta do Administrador Supremo não pode ser apagada.', 'AÇÃO NEGADA', 'error');
+          return;
+        }
+        await deleteDoc(userDocRef);
+        setAllMembers(prev => prev.filter(m => m.username.toLowerCase() !== targetUser.username.toLowerCase()));
+        showAlert(`A conta do usuário @${targetUser.username} foi apagada definitivamente.`, 'CONTA APAGADA', 'success');
       }
       setAdminActionId('');
     } catch (err) {
@@ -3725,6 +3749,18 @@ export default function App() {
                           <UserX className="w-3.5 h-3.5 text-zinc-400" />
                           <span>Remover Admin</span>
                         </button>
+                        {isGeneralAdmin && (
+                          <button
+                            onClick={() => {
+                              setShowAdminIdActionMenu(false);
+                              handleAdminActionById('deleteAccount', adminActionId);
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/80 text-red-400 flex items-center gap-2 font-bold border border-red-900/30"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                            <span>Apagar Conta</span>
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3872,6 +3908,16 @@ export default function App() {
                                           <span>Remover Cargo Admin</span>
                                         </button>
                                       )}
+                                      <button
+                                        onClick={() => {
+                                          setOpenMemberMenuUsername(null);
+                                          handleAdminActionById('deleteAccount', member.id || member.shortId || member.username);
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded flex items-center gap-2 font-bold hover:bg-red-950/80 text-red-400 border border-red-900/30 mt-1"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                                        <span>Apagar Conta</span>
+                                      </button>
                                     </>
                                   )}
                                 </>
@@ -5189,13 +5235,13 @@ export default function App() {
               </div>
               
               <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-emerald-900">
-                <button 
+                  <button 
                   onClick={() => { setCurrentGroupId(null); setShowGroupsMenu(false); }}
                   className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-colors ${!currentGroupId ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' : 'bg-black border-emerald-900/30 text-emerald-600 hover:bg-emerald-950/30'}`}
                 >
                   <Globe className="w-5 h-5 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm truncate">Chat Global</div>
+                    <div className="font-bold text-sm">Chat global - BRASIL 🇧🇷</div>
                     <div className="text-[10px] uppercase opacity-70">Canal Principal</div>
                   </div>
                 </button>
@@ -5214,12 +5260,12 @@ export default function App() {
                     onClick={() => { setCurrentGroupId(group.id); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
                     className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-colors ${currentGroupId === group.id ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' : 'bg-black border-emerald-900/30 text-emerald-600 hover:bg-emerald-950/30'}`}
                   >
-                    <Users className="w-5 h-5 shrink-0" />
+                    <Users className="w-5 h-5 shrink-0 mt-1 self-start" />
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-sm truncate flex items-center gap-1">
+                      <div className="font-bold text-sm flex items-center gap-1 break-words">
                         {group.name}
                       </div>
-                      <div className="text-[10px] opacity-70 truncate">{group.members.length} membros</div>
+                      <div className="text-[10px] opacity-70">{group.members.length} membros</div>
                     </div>
                   </button>
                 ))}
@@ -5258,7 +5304,7 @@ export default function App() {
                 <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
-                    <span className="font-extrabold text-[10px] sm:text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL</span>
+                    <span className="font-extrabold text-[10px] sm:text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL - BRASIL 🇧🇷</span>
                     <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                   </div>
                   <span className="text-[9px] sm:text-[10px] text-emerald-500 font-mono hidden xs:inline truncate">Canal Principal</span>
@@ -5567,7 +5613,7 @@ export default function App() {
                 <div className="flex items-center justify-center gap-2 opacity-60 my-2">
                   <Server className="w-3 h-3 text-emerald-600" />
                   <span className="text-emerald-700 text-xs uppercase tracking-widest text-center">
-                    {msg.text}
+                    {renderTextWithLinks(msg.text)}
                   </span>
                 </div>
               )}
@@ -5585,7 +5631,7 @@ export default function App() {
                     </div>
                     {msg.text && (
                       <p className="text-zinc-300 text-sm italic border-l-2 border-red-800 pl-2">
-                        "{msg.text}"
+                        "{renderTextWithLinks(msg.text)}"
                       </p>
                     )}
                     {msg.attachment && (
@@ -5759,7 +5805,7 @@ export default function App() {
                         {msg.text && (
                           <div className="flex items-baseline flex-wrap gap-1">
                             <span className="text-emerald-100 text-sm break-words leading-relaxed whitespace-pre-wrap">
-                              {msg.text}
+                              {renderTextWithLinks(msg.text)}
                             </span>
                             {msg.isEdited && (
                               <span className="text-[10px] text-zinc-400 italic">
@@ -5802,7 +5848,7 @@ export default function App() {
                         {msg.text && (
                           <div className="flex items-baseline flex-wrap gap-1">
                             <span className="text-emerald-100 text-sm break-words leading-relaxed whitespace-pre-wrap">
-                              {msg.text}
+                              {renderTextWithLinks(msg.text)}
                             </span>
                             {msg.isEdited && (
                               <span className="text-[10px] text-zinc-400 italic">
@@ -5848,7 +5894,7 @@ export default function App() {
                         {msg.text && (
                           <div className="flex items-baseline flex-wrap gap-1">
                             <span className="text-emerald-100 text-sm break-words leading-relaxed whitespace-pre-wrap">
-                              {msg.text}
+                              {renderTextWithLinks(msg.text)}
                             </span>
                             {msg.isEdited && (
                               <span className="text-[10px] text-zinc-400 italic">
@@ -5882,7 +5928,7 @@ export default function App() {
                     <>
                       {msg.text && (
                         <span className="text-emerald-100 text-sm break-words leading-relaxed whitespace-pre-wrap">
-                          {msg.text}
+                          {renderTextWithLinks(msg.text)}
                         </span>
                       )}
                       {msg.attachment && (
