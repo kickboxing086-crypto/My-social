@@ -692,10 +692,25 @@ export default function App() {
         // Trigger native device browser notification if background/permitted
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            new Notification(`My social - @${latestMsg.sender}`, {
+            const title = `My social - @${latestMsg.sender}`;
+            const options = {
               body: latestMsg.text || (latestMsg.attachment ? `Enviou um anexo: ${latestMsg.attachment.name}` : 'Enviou uma nova transmissão'),
-              icon: '/favicon.ico'
-            });
+              icon: '/icon-192.png',
+              badge: '/icon-192.png',
+              tag: 'new-message',
+              vibrate: [100, 50, 100],
+              data: { url: '/' }
+            };
+
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.ready.then((reg) => {
+                reg.showNotification(title, options);
+              }).catch(() => {
+                new Notification(title, options);
+              });
+            } else {
+              new Notification(title, options);
+            }
           } catch (e) {
             console.error('Push notification error:', e);
           }
@@ -719,10 +734,25 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('My social - Nova Denúncia', {
+              const title = 'My social - Nova Denúncia';
+              const options = {
                 body: `@${newRep.reportedBy} denunciou @${newRep.reportedUser}: "${newRep.reason}"`,
-                icon: '/favicon.ico'
-              });
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: 'report',
+                vibrate: [200, 100, 200],
+                data: { url: '/' }
+              };
+
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then((reg) => {
+                  reg.showNotification(title, options);
+                }).catch(() => {
+                  new Notification(title, options);
+                });
+              } else {
+                new Notification(title, options);
+              }
             } catch (e) {}
           }
         }
@@ -742,10 +772,25 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('My social - Nova Sugestão', {
+              const title = 'My social - Nova Sugestão';
+              const options = {
                 body: `@${newSug.sender} enviou: "${newSug.text}"`,
-                icon: '/favicon.ico'
-              });
+                icon: '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: 'suggestion',
+                vibrate: [100, 50, 100],
+                data: { url: '/' }
+              };
+
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then((reg) => {
+                  reg.showNotification(title, options);
+                }).catch(() => {
+                  new Notification(title, options);
+                });
+              } else {
+                new Notification(title, options);
+              }
             } catch (e) {}
           }
         }

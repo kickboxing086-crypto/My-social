@@ -1,8 +1,11 @@
-const CACHE_NAME = 'hud-devs-v1';
+const CACHE_NAME = 'mysocial-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/icon.jpg',
+  '/icon.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/manifest.json'
 ];
 
@@ -55,3 +58,21 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
+// Background Notification Click Event Handler
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});
+
