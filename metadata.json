@@ -1,6 +1,6 @@
 {
-  "name": "HUD DEVS",
-  "description": "Comunidade Oficial HUD DEVS - Painel Hacker de Comunicação, Denúncias e Moderação",
+  "name": "My social",
+  "description": "My social - Sua sociedade digital.",
   "requestFramePermissions": [
     "microphone"
   ],

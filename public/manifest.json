@@ -1,7 +1,7 @@
 {
-  "name": "HUD DEVS Community",
-  "short_name": "HUD DEVS",
-  "description": "Comunidade Oficial HUD DEVS - Painel Hacker de Comunicação, Denúncias e Moderação",
+  "name": "My social",
+  "short_name": "My social",
+  "description": "My social - Sua sociedade digital.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

@@ -201,7 +201,7 @@ const AudioPlayer = ({ src, name, durationSec }: { src: string, name: string, du
 };
 
 
-// HUD DEVS Sound Synth for Notifications & Mic Test
+// My social Sound Synth for Notifications & Mic Test
 const playHUDChime = () => {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -660,7 +660,7 @@ export default function App() {
     if (messages.length > prevMsgCountRef.current && prevMsgCountRef.current > 0) {
       const latestMsg = messages[messages.length - 1];
       if (latestMsg && latestMsg.sender !== currentUser?.username && latestMsg.type !== 'system') {
-        // Play HUD DEVS Chime audio sound
+        // Play My social Chime audio sound
         playHUDChime();
 
         // Display in-app floating push toast
@@ -672,7 +672,7 @@ export default function App() {
         // Trigger native device browser notification if background/permitted
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            new Notification(`HUD DEVS - @${latestMsg.sender}`, {
+            new Notification(`My social - @${latestMsg.sender}`, {
               body: latestMsg.text || (latestMsg.attachment ? `Enviou um anexo: ${latestMsg.attachment.name}` : 'Enviou uma nova transmissão'),
               icon: '/favicon.ico'
             });
@@ -699,7 +699,7 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('HUD DEVS - Nova Denúncia', {
+              new Notification('My social - Nova Denúncia', {
                 body: `@${newRep.reportedBy} denunciou @${newRep.reportedUser}: "${newRep.reason}"`,
                 icon: '/favicon.ico'
               });
@@ -722,7 +722,7 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('HUD DEVS - Nova Sugestão', {
+              new Notification('My social - Nova Sugestão', {
                 body: `@${newSug.sender} enviou: "${newSug.text}"`,
                 icon: '/favicon.ico'
               });
@@ -773,7 +773,7 @@ export default function App() {
 
   const handleInstallPWA = async () => {
     if (!deferredPrompt) {
-      showAlert('Abra o HUD DEVS em seu navegador (Chrome/Safari) para instalar o aplicativo nativo.', 'COMO INSTALAR', 'info');
+      showAlert('Abra o My social em seu navegador (Chrome/Safari) para instalar o aplicativo nativo.', 'COMO INSTALAR', 'info');
       return;
     }
     try {
@@ -1248,8 +1248,8 @@ export default function App() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Convite para o grupo ${group.name} - HUD DEVS`,
-          text: `Entre no grupo "${group.name}" no HUD DEVS:`,
+          title: `Convite para o grupo ${group.name} - My social`,
+          text: `Entre no grupo "${group.name}" no My social:`,
           url: inviteUrl,
         });
         return;
@@ -2201,7 +2201,7 @@ export default function App() {
           </div>
           
           <p className="text-emerald-700 text-xs font-mono tracking-widest uppercase mt-1">
-            HUD DEVS • REDE MENSAGEIRA
+            MY SOCIAL • REDE MENSAGEIRA
           </p>
         </div>
       </div>
@@ -2680,14 +2680,14 @@ export default function App() {
               </div>
               <div>
                 <h2 className="text-lg font-extrabold text-emerald-400 tracking-wider uppercase">Políticas de Privacidade & Diretrizes de Banimento</h2>
-                <p className="text-[10px] text-emerald-700 uppercase tracking-widest">Protocolo Geral de Conduta do HUD DEVS</p>
+                <p className="text-[10px] text-emerald-700 uppercase tracking-widest">Protocolo Geral de Conduta do My social</p>
               </div>
             </div>
 
             <div className="space-y-4 text-zinc-300 text-xs overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-emerald-900/60 leading-relaxed shrink-1">
               
               <div className="bg-emerald-950/30 p-3 rounded border border-emerald-900/50 text-emerald-200 text-[11px]">
-                <strong>AVISO IMPORTANTE AOS USUÁRIOS:</strong> O acesso e uso da rede HUD DEVS exigem conformidade irrestrita com estas diretrizes. O desconhecimento ou violação destas normas não isenta nenhum usuário das penalidades e banimentos previstos.
+                <strong>AVISO IMPORTANTE AOS USUÁRIOS:</strong> O acesso e uso da rede My social exigem conformidade irrestrita com estas diretrizes. O desconhecimento ou violação destas normas não isenta nenhum usuário das penalidades e banimentos previstos.
               </div>
 
               {/* SEÇÃO 1 */}
@@ -2866,7 +2866,7 @@ export default function App() {
               <h2 className="text-lg font-bold text-blue-400">Enviar Sugestão</h2>
             </div>
             <p className="text-zinc-400 text-sm mb-4">
-              Tem alguma ideia de melhoria para o HUD DEVS? Envie diretamente para a administração.
+              Tem alguma ideia de melhoria para o My social? Envie diretamente para a administração.
             </p>
             <textarea
               value={suggestionText}
@@ -3741,7 +3741,7 @@ export default function App() {
                 {micTestActive ? 'MICROFONE ATIVO E OPERACIONAL' : 'DIAGNÓSTICO DE MICROFONE'}
               </h3>
               <p className="text-emerald-700 text-xs font-mono mb-4">
-                {micTestActive ? 'Sinal capturado com sucesso pelo HUD DEVS' : 'Aguardando teste de sinal...'}
+                {micTestActive ? 'Sinal capturado com sucesso pelo My social' : 'Aguardando teste de sinal...'}
               </p>
 
               {/* VU Meter Visualizer */}
@@ -4258,7 +4258,7 @@ export default function App() {
             <div className="bg-emerald-950/30 p-4 rounded-full border border-emerald-800/50 mb-4">
               <Globe className="w-10 h-10 text-emerald-500" />
             </div>
-            <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">HUD DEVS</h1>
+            <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">My social</h1>
             <p className="text-emerald-700 text-xs mt-2 text-center tracking-widest">
               Sua Sociedade Digital.
             </p>
@@ -4433,7 +4433,7 @@ export default function App() {
             </div>
             <button onClick={() => setView('chat')} className="flex items-center gap-2 text-emerald-400 hover:text-emerald-200 transition-colors text-xs font-bold bg-black px-4 py-2 border border-emerald-900/50 rounded-sm">
               <ArrowLeft className="w-4 h-4" />
-              VOLTAR AO HUD DEVS
+              VOLTAR AO MY SOCIAL
             </button>
           </header>
 
@@ -5049,7 +5049,7 @@ export default function App() {
                     >
                       <div className="flex items-center gap-2">
                         <Smartphone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                        <span>Instalar App HUD DEVS</span>
+                        <span>Instalar App My social</span>
                       </div>
                       <span className="flex h-2 w-2 relative">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
