@@ -10,19 +10,14 @@ createRoot(document.getElementById('root')!).render(
 );
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    for (const registration of registrations) {
-      registration.unregister().then((success) => {
-        if (success) {
-          console.log('Service Worker desregistrado com sucesso para evitar conflitos de cache.');
-        }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((reg) => {
+        console.log('Service Worker registrado com sucesso para PWA:', reg.scope);
+      })
+      .catch((err) => {
+        console.error('Falha ao registrar Service Worker:', err);
       });
-    }
-  });
-  caches.keys().then((names) => {
-    for (const name of names) {
-      caches.delete(name);
-    }
   });
 }
 

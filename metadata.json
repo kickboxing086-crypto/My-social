@@ -1,6 +1,6 @@
 {
-  "name": "MY SOCIAL",
-  "description": "Uma rede social para todos os tipos de pessoas se comunicarem.",
+  "name": "HUD DEVS",
+  "description": "Comunidade Oficial HUD DEVS - Painel Hacker de Comunicação, Denúncias e Moderação",
   "requestFramePermissions": [
     "microphone"
   ],

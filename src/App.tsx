@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React from "react";
-import { Globe, Briefcase, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2 } from 'lucide-react';
+import { Globe, Briefcase, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
@@ -201,7 +201,7 @@ const AudioPlayer = ({ src, name, durationSec }: { src: string, name: string, du
 };
 
 
-// MY SOCIAL Sound Synth for Notifications & Mic Test
+// HUD DEVS Sound Synth for Notifications & Mic Test
 const playHUDChime = () => {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -288,6 +288,8 @@ export default function App() {
   const [editGroupNameInput, setEditGroupNameInput] = useState<string>('');
   const [editingTopicName, setEditingTopicName] = useState<string | null>(null);
   const [editTopicValue, setEditTopicValue] = useState<string>('');
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
 
   useEffect(() => {
     if (groupSettingsTarget) {
@@ -658,7 +660,7 @@ export default function App() {
     if (messages.length > prevMsgCountRef.current && prevMsgCountRef.current > 0) {
       const latestMsg = messages[messages.length - 1];
       if (latestMsg && latestMsg.sender !== currentUser?.username && latestMsg.type !== 'system') {
-        // Play MY SOCIAL Chime audio sound
+        // Play HUD DEVS Chime audio sound
         playHUDChime();
 
         // Display in-app floating push toast
@@ -670,7 +672,7 @@ export default function App() {
         // Trigger native device browser notification if background/permitted
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
-            new Notification(`MY SOCIAL - @${latestMsg.sender}`, {
+            new Notification(`HUD DEVS - @${latestMsg.sender}`, {
               body: latestMsg.text || (latestMsg.attachment ? `Enviou um anexo: ${latestMsg.attachment.name}` : 'Enviou uma nova transmissão'),
               icon: '/favicon.ico'
             });
@@ -697,7 +699,7 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('MY SOCIAL - Nova Denúncia', {
+              new Notification('HUD DEVS - Nova Denúncia', {
                 body: `@${newRep.reportedBy} denunciou @${newRep.reportedUser}: "${newRep.reason}"`,
                 icon: '/favicon.ico'
               });
@@ -720,7 +722,7 @@ export default function App() {
           });
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('MY SOCIAL - Nova Sugestão', {
+              new Notification('HUD DEVS - Nova Sugestão', {
                 body: `@${newSug.sender} enviou: "${newSug.text}"`,
                 icon: '/favicon.ico'
               });
@@ -748,6 +750,42 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, [reports, allMembers, isAdmin]);
+
+  // Capture the PWA install event
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // If already running standalone (already installed)
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setShowInstallBtn(false);
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallPWA = async () => {
+    if (!deferredPrompt) {
+      showAlert('Abra o HUD DEVS em seu navegador (Chrome/Safari) para instalar o aplicativo nativo.', 'COMO INSTALAR', 'info');
+      return;
+    }
+    try {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`PWA installation outcome: ${outcome}`);
+      setDeferredPrompt(null);
+      setShowInstallBtn(false);
+    } catch (err) {
+      console.error('Error triggering PWA install:', err);
+    }
+  };
 
   const addSystemMessage = async (text: string) => {
     await addDoc(collection(db, 'messages'), {
@@ -1210,8 +1248,8 @@ export default function App() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Convite para o grupo ${group.name} - MY SOCIAL`,
-          text: `Entre no grupo "${group.name}" no MY SOCIAL:`,
+          title: `Convite para o grupo ${group.name} - HUD DEVS`,
+          text: `Entre no grupo "${group.name}" no HUD DEVS:`,
           url: inviteUrl,
         });
         return;
@@ -2163,7 +2201,7 @@ export default function App() {
           </div>
           
           <p className="text-emerald-700 text-xs font-mono tracking-widest uppercase mt-1">
-            MY SOCIAL • REDE MENSAGEIRA
+            HUD DEVS • REDE MENSAGEIRA
           </p>
         </div>
       </div>
@@ -2642,14 +2680,14 @@ export default function App() {
               </div>
               <div>
                 <h2 className="text-lg font-extrabold text-emerald-400 tracking-wider uppercase">Políticas de Privacidade & Diretrizes de Banimento</h2>
-                <p className="text-[10px] text-emerald-700 uppercase tracking-widest">Protocolo Geral de Conduta do MY SOCIAL</p>
+                <p className="text-[10px] text-emerald-700 uppercase tracking-widest">Protocolo Geral de Conduta do HUD DEVS</p>
               </div>
             </div>
 
             <div className="space-y-4 text-zinc-300 text-xs overflow-y-auto pr-3 scrollbar-thin scrollbar-thumb-emerald-900/60 leading-relaxed shrink-1">
               
               <div className="bg-emerald-950/30 p-3 rounded border border-emerald-900/50 text-emerald-200 text-[11px]">
-                <strong>AVISO IMPORTANTE AOS USUÁRIOS:</strong> O acesso e uso da rede MY SOCIAL exigem conformidade irrestrita com estas diretrizes. O desconhecimento ou violação destas normas não isenta nenhum usuário das penalidades e banimentos previstos.
+                <strong>AVISO IMPORTANTE AOS USUÁRIOS:</strong> O acesso e uso da rede HUD DEVS exigem conformidade irrestrita com estas diretrizes. O desconhecimento ou violação destas normas não isenta nenhum usuário das penalidades e banimentos previstos.
               </div>
 
               {/* SEÇÃO 1 */}
@@ -2828,7 +2866,7 @@ export default function App() {
               <h2 className="text-lg font-bold text-blue-400">Enviar Sugestão</h2>
             </div>
             <p className="text-zinc-400 text-sm mb-4">
-              Tem alguma ideia de melhoria para o MY SOCIAL? Envie diretamente para a administração.
+              Tem alguma ideia de melhoria para o HUD DEVS? Envie diretamente para a administração.
             </p>
             <textarea
               value={suggestionText}
@@ -3703,7 +3741,7 @@ export default function App() {
                 {micTestActive ? 'MICROFONE ATIVO E OPERACIONAL' : 'DIAGNÓSTICO DE MICROFONE'}
               </h3>
               <p className="text-emerald-700 text-xs font-mono mb-4">
-                {micTestActive ? 'Sinal capturado com sucesso pelo MY SOCIAL' : 'Aguardando teste de sinal...'}
+                {micTestActive ? 'Sinal capturado com sucesso pelo HUD DEVS' : 'Aguardando teste de sinal...'}
               </p>
 
               {/* VU Meter Visualizer */}
@@ -4220,9 +4258,9 @@ export default function App() {
             <div className="bg-emerald-950/30 p-4 rounded-full border border-emerald-800/50 mb-4">
               <Globe className="w-10 h-10 text-emerald-500" />
             </div>
-            <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">MY SOCIAL</h1>
+            <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">HUD DEVS</h1>
             <p className="text-emerald-700 text-xs mt-2 text-center tracking-widest">
-              sua sociedade digital.
+              Sua Sociedade Digital.
             </p>
           </div>
 
@@ -4395,7 +4433,7 @@ export default function App() {
             </div>
             <button onClick={() => setView('chat')} className="flex items-center gap-2 text-emerald-400 hover:text-emerald-200 transition-colors text-xs font-bold bg-black px-4 py-2 border border-emerald-900/50 rounded-sm">
               <ArrowLeft className="w-4 h-4" />
-              VOLTAR AO MY SOCIAL
+              VOLTAR AO HUD DEVS
             </button>
           </header>
 
@@ -4996,6 +5034,28 @@ export default function App() {
                         <span>Sair do Grupo</span>
                       </button>
                     )}
+
+                    {/* PWA Installation Option */}
+                    <button
+                      onClick={() => {
+                        setShowHeaderAdminMenu(false);
+                        if (deferredPrompt) {
+                          handleInstallPWA();
+                        } else {
+                          showAlert('No iOS/Safari: Toque no botão "Compartilhar" (ícone de quadrado com seta para cima) e escolha "Adicionar à Tela de Início". No Android/Chrome: Toque no menu do navegador e escolha "Instalar aplicativo" ou "Instalar app".', 'TRANSFORMAR EM APP', 'info');
+                        }
+                      }}
+                      className="w-full text-left px-2.5 py-2 rounded hover:bg-emerald-950/60 text-emerald-400 transition-colors flex items-center justify-between font-bold border-t border-emerald-900/40 mt-1"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                        <span>Instalar App HUD DEVS</span>
+                      </div>
+                      <span className="flex h-2 w-2 relative">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                    </button>
 
                     {/* Logout option */}
                     <button
