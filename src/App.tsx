@@ -227,6 +227,19 @@ const playHUDChime = () => {
   }
 };
 
+const triggerSafeDownload = (url: string, filename: string) => {
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (err) {
+    console.error('Download error:', err);
+  }
+};
+
 const formatTimestamp = (ts: any) => {
   if (!ts) return '';
   try {
@@ -290,6 +303,13 @@ export default function App() {
   const [editTopicValue, setEditTopicValue] = useState<string>('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
+  const [stagedAttachment, setStagedAttachment] = useState<{
+    name: string;
+    fileType: 'image' | 'document';
+    url: string;
+  } | null>(null);
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
+  const [lightboxImageName, setLightboxImageName] = useState<string>('');
 
   useEffect(() => {
     if (groupSettingsTarget) {
@@ -1360,7 +1380,7 @@ export default function App() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputValue.trim() || !currentUser) return;
+    if ((!inputValue.trim() && !stagedAttachment) || !currentUser) return;
 
     if (currentUser.isBanned) {
       showAlert('Sua conta está BANIDA nesta comunidade. Você está impedido de enviar qualquer tipo de mensagem.', 'CONTA BANIDA', 'warning');
@@ -1370,25 +1390,54 @@ export default function App() {
 
     const textToSend = inputValue.trim();
 
-    if (checkProfanity(textToSend)) {
+    if (textToSend && checkProfanity(textToSend)) {
       await executeAutoBan(textToSend);
       return;
     }
 
-    await addDoc(collection(db, 'messages'), {
-      sender: currentUser.username,
-      role: currentUser.role,
-      text: textToSend,
-      type: 'user',
-      viewOnce: isViewOnce,
-      expired: false,
-      groupId: currentGroupId || "global",
-      topic: currentGroupId ? (currentTopic || 'Geral') : 'Geral',
-      timestamp: serverTimestamp()
-    });
-    
-    setInputValue('');
-    setIsViewOnce(false);
+    try {
+      const messageData: any = {
+        sender: currentUser.username,
+        role: currentUser.role,
+        type: 'user',
+        viewOnce: isViewOnce,
+        expired: false,
+        groupId: currentGroupId || "global",
+        topic: currentGroupId ? (currentTopic || 'Geral') : 'Geral',
+        timestamp: serverTimestamp()
+      };
+
+      if (stagedAttachment) {
+        messageData.attachment = {
+          name: stagedAttachment.name,
+          fileType: stagedAttachment.fileType,
+          url: stagedAttachment.url
+        };
+        messageData.text = textToSend || "Arquivo anexado:";
+      } else {
+        messageData.text = textToSend;
+      }
+
+      await addDoc(collection(db, 'messages'), messageData);
+
+      if (stagedAttachment && stagedAttachment.fileType === 'image') {
+        await triggerAutoModerationReport(
+          currentUser.username,
+          `[MODERAÇÃO AUTOMÁTICA DE MÍDIA] Mídia de imagem postada: "${stagedAttachment.name}"${textToSend ? ` com a legenda: "${textToSend}"` : ''}`,
+          stagedAttachment.url
+        );
+      }
+
+      setInputValue('');
+      setStagedAttachment(null);
+      setIsViewOnce(false);
+    } catch (err: any) {
+      if (err.message?.includes('exceeds the maximum allowed size')) {
+        showAlert('O arquivo excede o limite de tamanho permitido (~1MB).', 'TAMANHO EXCESSIVO', 'warning');
+      } else {
+        console.error(err);
+      }
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1434,32 +1483,11 @@ export default function App() {
             ctx.drawImage(img, 0, 0, width, height);
             const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6);
             
-            try {
-              await addDoc(collection(db, 'messages'), {
-                sender: currentUser.username,
-                role: currentUser.role,
-                text: 'Arquivo anexado:',
-                type: 'user',
-                attachment: {
-                  name: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
-                  fileType,
-                  url: compressedBase64
-                },
-                viewOnce: isViewOnce,
-                expired: false,
-                groupId: currentGroupId || "global",
-                topic: currentGroupId ? (currentTopic || 'Geral') : 'Geral',
-                timestamp: serverTimestamp()
-              });
-              await triggerAutoModerationReport(currentUser.username, `[MODERAÇÃO AUTOMÁTICA DE MÍDIA] Mídia de imagem postada: "${file.name}"`, compressedBase64);
-              setIsViewOnce(false);
-            } catch (err: any) {
-              if (err.message?.includes('exceeds the maximum allowed size')) {
-                showAlert('O arquivo excede o limite de tamanho permitido (~1MB).', 'TAMANHO EXCESSIVO', 'warning');
-              } else {
-                console.error(err);
-              }
-            }
+            setStagedAttachment({
+              name: file.name.replace(/\.[^/.]+$/, "") + ".jpg",
+              fileType: 'image',
+              url: compressedBase64
+            });
           }
         };
       };
@@ -1475,31 +1503,11 @@ export default function App() {
       reader.onload = async (event) => {
         const base64Url = event.target?.result as string;
         
-        try {
-          await addDoc(collection(db, 'messages'), {
-            sender: currentUser.username,
-            role: currentUser.role,
-            text: 'Arquivo anexado:',
-            type: 'user',
-            attachment: {
-              name: file.name,
-              fileType,
-              url: base64Url
-            },
-            viewOnce: isViewOnce,
-            expired: false,
-            groupId: currentGroupId || "global",
-      topic: currentGroupId ? (currentTopic || 'Geral') : 'Geral',
-      timestamp: serverTimestamp()
-          });
-          setIsViewOnce(false);
-        } catch (err: any) {
-          if (err.message?.includes('exceeds the maximum allowed size')) {
-            showAlert('O arquivo excede o limite de tamanho permitido (~1MB).', 'TAMANHO EXCESSIVO', 'warning');
-          } else {
-            console.error(err);
-          }
-        }
+        setStagedAttachment({
+          name: file.name,
+          fileType: 'document',
+          url: base64Url
+        });
       };
       reader.readAsDataURL(file);
     }
@@ -2463,6 +2471,57 @@ export default function App() {
       )}
     </AnimatePresence>
   );
+
+  const renderLightboxModal = () => {
+    if (!lightboxImageUrl) return null;
+    return (
+      <AnimatePresence>
+        <div className="fixed inset-0 bg-black/95 z-[999] flex flex-col items-center justify-center p-4 backdrop-blur-sm">
+          <div className="absolute top-4 right-4 flex items-center gap-3 z-[1000]">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                triggerSafeDownload(lightboxImageUrl, lightboxImageName);
+              }}
+              className="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800 text-xs font-mono font-bold rounded flex items-center gap-1.5 transition-colors cursor-pointer focus:outline-none"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Baixar Arquivo
+            </button>
+            <button
+              onClick={() => setLightboxImageUrl(null)}
+              className="p-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 rounded transition-colors cursor-pointer focus:outline-none"
+              title="Fechar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div
+            onClick={() => setLightboxImageUrl(null)}
+            className="w-full h-full flex flex-col items-center justify-center cursor-zoom-out"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="max-w-4xl max-h-[80vh] flex flex-col items-center justify-center relative p-2"
+            >
+              <img
+                src={lightboxImageUrl}
+                alt={lightboxImageName}
+                referrerPolicy="no-referrer"
+                className="max-w-full max-h-[75vh] object-contain rounded border border-emerald-900/50 shadow-2xl bg-zinc-950/40"
+              />
+              <p className="mt-3 text-zinc-400 text-xs font-mono truncate max-w-lg">
+                {lightboxImageName}
+              </p>
+            </motion.div>
+          </div>
+        </div>
+      </AnimatePresence>
+    );
+  };
 
   const renderGroupTopicsModal = () => {
     const group = groups.find(g => g.id === currentGroupId);
@@ -3870,13 +3929,21 @@ export default function App() {
                       {userAppeal.adminReplyImage && (
                         <div>
                           <p className="text-[11px] text-fuchsia-300 font-bold mb-1.5">PROVA CONCRETA APRESENTADA PELO ADMIN:</p>
-                          <a href={userAppeal.adminReplyImage} target="_blank" rel="noreferrer" title="Clique para expandir imagem em tela cheia">
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setLightboxImageUrl(userAppeal.adminReplyImage);
+                              setLightboxImageName('Prova concreta do Admin.jpg');
+                            }}
+                            className="block w-full focus:outline-none cursor-zoom-in"
+                            title="Clique para expandir imagem em tela cheia"
+                          >
                             <img 
                               src={userAppeal.adminReplyImage} 
                               alt="Prova concreta do Admin" 
                               className="max-h-60 rounded border border-fuchsia-700 object-contain hover:opacity-90 transition-opacity bg-black mx-auto"
                             />
-                          </a>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -5136,9 +5203,26 @@ export default function App() {
                       <div className="text-xs text-red-300 font-mono bg-black/60 p-2 rounded border border-red-900/40">
                         Anexo: {msg.attachment.name} ({msg.attachment.fileType})
                         {msg.attachment.url && (
-                          <a href={msg.attachment.url} target="_blank" rel="noreferrer" className="block text-emerald-400 hover:underline mt-1">
-                            Visualizar anexo
-                          </a>
+                          msg.attachment.fileType === 'image' ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLightboxImageUrl(msg.attachment.url);
+                                setLightboxImageName(msg.attachment.name);
+                              }}
+                              className="block text-emerald-400 hover:underline text-left mt-1 cursor-zoom-in font-bold focus:outline-none"
+                            >
+                              Visualizar imagem
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => triggerSafeDownload(msg.attachment.url, msg.attachment.name)}
+                              className="block text-emerald-400 hover:underline text-left mt-1 font-bold focus:outline-none"
+                            >
+                              Baixar anexo
+                            </button>
+                          )
                         )}
                       </div>
                     )}
@@ -5280,9 +5364,17 @@ export default function App() {
                         {msg.attachment && (
                           <div className={`mt-2 bg-black/60 border border-emerald-900/50 p-2 rounded-sm flex flex-col gap-2 ${!msg.text ? 'mt-0' : ''}`}>
                             {msg.attachment.fileType === 'image' && msg.attachment.url ? (
-                              <a href={msg.attachment.url} target="_blank" rel="noreferrer" title="Abrir imagem">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLightboxImageUrl(msg.attachment.url!);
+                                  setLightboxImageName(msg.attachment.name);
+                                }}
+                                className="block focus:outline-none cursor-zoom-in text-left"
+                                title="Abrir imagem"
+                              >
                                 <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain hover:opacity-80 transition-opacity" />
-                              </a>
+                              </button>
                             ) : msg.attachment.fileType === 'audio' && msg.attachment.url ? (
                               <AudioPlayer src={msg.attachment.url} name={msg.attachment.name} durationSec={msg.attachment.duration} />
                             ) : null}
@@ -5315,7 +5407,17 @@ export default function App() {
                         {msg.attachment && (
                           <div className={`mt-2 bg-black/60 border border-emerald-900/50 p-2 rounded-sm flex flex-col gap-2 ${!msg.text ? 'mt-0' : ''}`}>
                             {msg.attachment.fileType === 'image' && msg.attachment.url ? (
-                              <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLightboxImageUrl(msg.attachment.url!);
+                                  setLightboxImageName(msg.attachment.name);
+                                }}
+                                className="block focus:outline-none cursor-zoom-in text-left"
+                                title="Abrir imagem"
+                              >
+                                <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain hover:opacity-80 transition-opacity" />
+                              </button>
                             ) : msg.attachment.fileType === 'audio' && msg.attachment.url ? (
                               <AudioPlayer src={msg.attachment.url} name={msg.attachment.name} durationSec={msg.attachment.duration} />
                             ) : null}
@@ -5351,7 +5453,17 @@ export default function App() {
                         {msg.attachment && (
                           <div className={`mt-2 bg-black/60 border border-emerald-900/50 p-2 rounded-sm flex flex-col gap-2 ${!msg.text ? 'mt-0' : ''}`}>
                             {msg.attachment.fileType === 'image' && msg.attachment.url ? (
-                              <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLightboxImageUrl(msg.attachment.url!);
+                                  setLightboxImageName(msg.attachment.name);
+                                }}
+                                className="block focus:outline-none cursor-zoom-in text-left"
+                                title="Abrir imagem"
+                              >
+                                <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain hover:opacity-80 transition-opacity" />
+                              </button>
                             ) : msg.attachment.fileType === 'audio' && msg.attachment.url ? (
                               <AudioPlayer src={msg.attachment.url} name={msg.attachment.name} durationSec={msg.attachment.duration} />
                             ) : null}
@@ -5369,9 +5481,17 @@ export default function App() {
                       {msg.attachment && (
                         <div className={`mt-2 bg-black/60 border border-emerald-900/50 p-2 rounded-sm flex flex-col gap-2 ${!msg.text ? 'mt-0' : ''}`}>
                           {msg.attachment.fileType === 'image' && msg.attachment.url ? (
-                            <a href={msg.attachment.url} target="_blank" rel="noreferrer" title="Abrir imagem inteira">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLightboxImageUrl(msg.attachment.url!);
+                                setLightboxImageName(msg.attachment.name);
+                              }}
+                              className="block focus:outline-none cursor-zoom-in text-left"
+                              title="Abrir imagem inteira"
+                            >
                               <img src={msg.attachment.url} alt="Anexo" className="max-h-48 max-w-full rounded-sm border border-emerald-800/30 object-contain hover:opacity-80 transition-opacity" />
-                            </a>
+                            </button>
                           ) : msg.attachment.fileType === 'audio' && msg.attachment.url ? (
                             <AudioPlayer src={msg.attachment.url} name={msg.attachment.name} durationSec={msg.attachment.duration} />
                           ) : (
@@ -5382,9 +5502,13 @@ export default function App() {
                                 {msg.attachment.fileType === 'document' && <FileText className="w-4 h-4 text-zinc-400" />}
                               </div>
                               {msg.attachment.url ? (
-                                <a href={msg.attachment.url} download={msg.attachment.name} className="text-emerald-300 text-xs truncate max-w-[200px] hover:underline cursor-pointer">
+                                <button
+                                  type="button"
+                                  onClick={() => triggerSafeDownload(msg.attachment.url!, msg.attachment.name)}
+                                  className="text-emerald-300 text-xs truncate max-w-[200px] hover:underline cursor-pointer text-left font-bold focus:outline-none"
+                                >
                                   {msg.attachment.name}
-                                </a>
+                                </button>
                               ) : (
                                 <span className="text-emerald-300 text-xs truncate max-w-[200px]">
                                   {msg.attachment.name} (antigo, não pode ser aberto)
@@ -5426,6 +5550,52 @@ export default function App() {
             onChange={handleFileUpload} 
             className="hidden" 
           />
+
+          {stagedAttachment && (
+            <div className="bg-black/90 border border-emerald-800/80 p-2 px-3 rounded mb-2 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-1 duration-200">
+              <div className="flex items-center gap-3 min-w-0">
+                {stagedAttachment.fileType === 'image' ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLightboxImageUrl(stagedAttachment.url);
+                      setLightboxImageName(stagedAttachment.name);
+                    }}
+                    className="relative group shrink-0 block focus:outline-none cursor-zoom-in"
+                    title="Visualizar anexo"
+                  >
+                    <img
+                      src={stagedAttachment.url}
+                      alt="Preview"
+                      className="w-10 h-10 rounded border border-emerald-800 object-cover hover:opacity-80 transition-opacity animate-pulse"
+                    />
+                  </button>
+                ) : (
+                  <div className="w-10 h-10 rounded border border-emerald-800 bg-emerald-950/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5 text-emerald-400" />
+                  </div>
+                )}
+                <div className="min-w-0 font-mono text-left animate-pulse">
+                  <p className="text-xs text-emerald-300 font-bold truncate max-w-[150px] sm:max-w-[350px]">
+                    {stagedAttachment.name}
+                  </p>
+                  <p className="text-[9px] text-emerald-600 uppercase tracking-widest font-extrabold">
+                    {stagedAttachment.fileType === 'image' ? 'Imagem Carregada (Opcional: digite legenda)' : 'Documento Carregado'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setStagedAttachment(null)}
+                  className="p-1.5 text-red-400 hover:text-red-200 bg-red-950/40 border border-red-900/60 rounded transition-colors"
+                  title="Remover anexo"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-end mb-1 pr-1 font-mono">
             <span className="text-[10px] font-bold text-emerald-300 bg-black/90 px-2.5 py-0.5 rounded border border-emerald-800/80 shadow">
@@ -5576,7 +5746,7 @@ export default function App() {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     if (!window.matchMedia('(max-width: 640px)').matches) {
                       e.preventDefault();
-                      if (inputValue.trim()) {
+                      if (inputValue.trim() || stagedAttachment) {
                         handleSendMessage(e);
                       }
                     }
@@ -5590,7 +5760,7 @@ export default function App() {
             {/* Send Button */}
             <button
               type="submit"
-              disabled={isRecording || (!inputValue.trim() && !isRecording)}
+              disabled={isRecording || (!inputValue.trim() && !stagedAttachment && !isRecording)}
               className="w-11 h-10 shrink-0 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-300 border border-emerald-700 font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center rounded-sm active:scale-95"
               title="Enviar mensagem"
             >
@@ -5618,6 +5788,7 @@ export default function App() {
       {renderBanReasonModal()}
       {renderItemDeleteConfirmModal()}
       {renderGroupTopicsModal()}
+      {renderLightboxModal()}
     </div>
   );
 }
