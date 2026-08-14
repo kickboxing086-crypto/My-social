@@ -1227,16 +1227,24 @@ export default function App() {
       
       // Determine the assignment time
       let assignedTimeMs = now;
-      if (rep.assignedAt) {
-        assignedTimeMs = typeof rep.assignedAt.toMillis === 'function' 
-          ? rep.assignedAt.toMillis() 
-          : (typeof rep.assignedAt === 'number' ? rep.assignedAt : new Date(rep.assignedAt).getTime());
+      
+      // CRITICAL: If assignedAt exists in the object (even if null/pending), 
+      // it means an assignment just happened. Treat as "now" to avoid loops.
+      if (rep.hasOwnProperty('assignedAt')) {
+        if (rep.assignedAt) {
+          assignedTimeMs = typeof rep.assignedAt.toMillis === 'function' 
+            ? rep.assignedAt.toMillis() 
+            : (typeof rep.assignedAt === 'number' ? rep.assignedAt : new Date(rep.assignedAt).getTime());
+        } else {
+          // It's null/pending, so it's a very recent assignment
+          assignedTimeMs = now;
+        }
       } else if (rep.timestamp) {
         assignedTimeMs = typeof rep.timestamp.toMillis === 'function' 
           ? rep.timestamp.toMillis() 
           : (typeof rep.timestamp === 'number' ? rep.timestamp : new Date(rep.timestamp).getTime());
       } else {
-        continue; // No timestamp available yet
+        continue;
       }
 
       const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
@@ -1276,16 +1284,20 @@ export default function App() {
       
       // Determine the assignment time
       let assignedTimeMs = now;
-      if (app.assignedAt) {
-        assignedTimeMs = typeof app.assignedAt.toMillis === 'function' 
-          ? app.assignedAt.toMillis() 
-          : (typeof app.assignedAt === 'number' ? app.assignedAt : new Date(app.assignedAt).getTime());
+      if (app.hasOwnProperty('assignedAt')) {
+        if (app.assignedAt) {
+          assignedTimeMs = typeof app.assignedAt.toMillis === 'function' 
+            ? app.assignedAt.toMillis() 
+            : (typeof app.assignedAt === 'number' ? app.assignedAt : new Date(app.assignedAt).getTime());
+        } else {
+          assignedTimeMs = now;
+        }
       } else if (app.timestamp) {
         assignedTimeMs = typeof app.timestamp.toMillis === 'function' 
           ? app.timestamp.toMillis() 
           : (typeof app.timestamp === 'number' ? app.timestamp : new Date(app.timestamp).getTime());
       } else {
-        continue; // No timestamp available yet
+        continue;
       }
 
       const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
@@ -1324,16 +1336,20 @@ export default function App() {
       
       // Determine the assignment time
       let assignedTimeMs = now;
-      if (sug.assignedAt) {
-        assignedTimeMs = typeof sug.assignedAt.toMillis === 'function' 
-          ? sug.assignedAt.toMillis() 
-          : (typeof sug.assignedAt === 'number' ? sug.assignedAt : new Date(sug.assignedAt).getTime());
+      if (sug.hasOwnProperty('assignedAt')) {
+        if (sug.assignedAt) {
+          assignedTimeMs = typeof sug.assignedAt.toMillis === 'function' 
+            ? sug.assignedAt.toMillis() 
+            : (typeof sug.assignedAt === 'number' ? sug.assignedAt : new Date(sug.assignedAt).getTime());
+        } else {
+          assignedTimeMs = now;
+        }
       } else if (sug.timestamp) {
         assignedTimeMs = typeof sug.timestamp.toMillis === 'function' 
           ? sug.timestamp.toMillis() 
           : (typeof sug.timestamp === 'number' ? sug.timestamp : new Date(sug.timestamp).getTime());
       } else {
-        continue; // No timestamp available yet
+        continue;
       }
 
       const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
@@ -2990,7 +3006,7 @@ export default function App() {
                 </p>
                 <ul className="list-disc pl-5 space-y-1.5 text-zinc-400 text-[11px]">
                   <li>
-                    <strong className="text-zinc-200">Exibição de Conteúdo Inadequado:</strong> Á expressamente proibido enviar imagens, áudios, textos ou links que contenham pornografia, violência, assédio, discriminação, discurso de ódio ou ilegalidades.
+                    <strong className="text-zinc-200">Exibição de Conteúdo Inadequado:</strong> É expressamente proibido enviar imagens, áudios, textos ou links que contenham pornografia, violência, assédio, discriminação, discurso de ódio ou ilegalidades.
                   </li>
                   <li>
                     <strong className="text-zinc-200">Linguagem Imprópria & Palavrões:</strong> A rede possui um sistema autônomo de moderação com inteligência atenta. O envio de palavrões ou ofensas resulta em banimento autônomo imediato.
@@ -3986,7 +4002,7 @@ export default function App() {
             <p className="text-zinc-300 text-xs mb-6 leading-relaxed bg-black/60 p-3 rounded border border-red-900/40 font-mono">
               Tem certeza que deseja apagar permanentemente o usuário <strong className="text-white">@{userToDeleteConfirm.username}</strong> ({userToDeleteConfirm.name})?
               <br /><br />
-              <span className="text-red-400 font-bold">â ï¸ Esta ação irá expurgar a credencial do usuário e TODAS as suas mensagens no chat!</span>
+              <span className="text-red-400 font-bold">⚠️ Esta ação irá expurgar a credencial do usuário e TODAS as suas mensagens no chat!</span>
             </p>
 
             <div className="mb-6">
@@ -4444,7 +4460,7 @@ export default function App() {
                 className="w-full py-2.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700 font-bold text-xs transition-all rounded flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(16,185,129,0.2)]"
               >
                 <Check className="w-4 h-4" />
-                ACEITAR APELAÁÁO & DESBANIR USUÁRIO
+                ACEITAR APELAÇÃO & DESBANIR USUÁRIO
               </button>
 
               <button
@@ -4591,7 +4607,7 @@ export default function App() {
                   {itemToDeleteConfirm.title}
                 </h2>
                 <p className="text-[10px] text-red-700 uppercase tracking-widest">
-                  CONFIRMAÁÁO EM 2 ETAPAS (AÁÁO IRREVERSÍVEL)
+                  CONFIRMAÇÃO EM 2 ETAPAS (AÇÃO IRREVERSÍVEL)
                 </p>
               </div>
             </div>
@@ -4769,7 +4785,7 @@ export default function App() {
               </div>
 
               <div>
-                <label className="block text-emerald-700 text-xs mb-1 font-bold">USUÁRIO DE REDE (ÁNICO)</label>
+                <label className="block text-emerald-700 text-xs mb-1 font-bold">USUÁRIO DE REDE (ÚNICO)</label>
                 <input
                   type="text"
                   required
@@ -5065,7 +5081,7 @@ export default function App() {
                               app.status === 'rejected' ? 'bg-red-950 text-red-400 border border-red-800' :
                               'bg-amber-950 text-amber-400 border border-amber-800 animate-pulse'
                             }`}>
-                              {app.status === 'pending' ? 'ANÁLISE' : app.status}
+                              {app.status === 'pending' ? 'ANÁLISE' : (app.status === 'approved' ? 'APROVADA' : 'REJEITADA')}
                             </span>
                             <button
                               onClick={() => handleDeleteAppeal(app)}
