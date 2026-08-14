@@ -812,14 +812,16 @@ export default function App() {
     const interval = setInterval(() => {
       if (reports.length > 0) checkAndEscalateReports(reports, allMembers);
       if (appeals.length > 0) checkAndEscalateAppeals(appeals, allMembers);
+      if (suggestions.length > 0) checkAndEscalateSuggestions(suggestions, allMembers);
     }, 30000); // Check every 30 seconds
 
     // Run once initially as well
     if (reports.length > 0) checkAndEscalateReports(reports, allMembers);
     if (appeals.length > 0) checkAndEscalateAppeals(appeals, allMembers);
+    if (suggestions.length > 0) checkAndEscalateSuggestions(suggestions, allMembers);
 
     return () => clearInterval(interval);
-  }, [reports, appeals, allMembers, isAdmin]);
+  }, [reports, appeals, suggestions, allMembers, isAdmin]);
 
   // Capture the PWA install event
   useEffect(() => {
@@ -1215,7 +1217,7 @@ export default function App() {
     }
   };
 
-  const ADMIN_TASK_DEADLINE_MINUTES = 720; // 12 hours
+  const ADMIN_TASK_DEADLINE_MINUTES = 30; // 30 minutes
 
   const checkAndEscalateReports = async (reportsToProcess: Report[], membersList: DevUser[]) => {
     const now = Date.now();
@@ -1308,6 +1310,53 @@ export default function App() {
             });
           } catch (err) {
             console.error("Failed to escalate appeal:", err);
+          }
+        }
+      }
+    }
+  };
+
+  const checkAndEscalateSuggestions = async (suggestionsToProcess: Suggestion[], membersList: DevUser[]) => {
+    const now = Date.now();
+    for (const sug of suggestionsToProcess) {
+      if (sug.adminReply) continue; // Already resolved
+      
+      // Determine the assignment time
+      let assignedTimeMs = now;
+      if (sug.assignedAt) {
+        assignedTimeMs = typeof sug.assignedAt.toMillis === 'function' 
+          ? sug.assignedAt.toMillis() 
+          : (typeof sug.assignedAt === 'number' ? sug.assignedAt : new Date(sug.assignedAt).getTime());
+      } else if (sug.timestamp) {
+        assignedTimeMs = typeof sug.timestamp.toMillis === 'function' 
+          ? sug.timestamp.toMillis() 
+          : (typeof sug.timestamp === 'number' ? sug.timestamp : new Date(sug.timestamp).getTime());
+      } else {
+        continue; // No timestamp available yet
+      }
+
+      const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
+      if (elapsedMinutes >= ADMIN_TASK_DEADLINE_MINUTES) {
+        const adminPool = membersList.filter(m => {
+          const r = (m.role || '').toLowerCase();
+          const u = (m.username || '').toLowerCase();
+          const isAdminRole = r === 'administrador geral' || r === 'administrador' || r === 'admin' || u === 'samuellsilvva02';
+          return isAdminRole && m.username !== sug.assignedAdmin;
+        });
+
+        if (adminPool.length > 0) {
+          const randomIndex = Math.floor(Math.random() * adminPool.length);
+          const newAdmin = adminPool[randomIndex].username;
+          
+          console.log(`Suggestion ${sug.id} escalated from @${sug.assignedAdmin} to @${newAdmin} after ${Math.round(elapsedMinutes)} minutes.`);
+          
+          try {
+            await updateDoc(doc(db, 'suggestions', sug.id), {
+              assignedAdmin: newAdmin,
+              assignedAt: serverTimestamp()
+            });
+          } catch (err) {
+            console.error("Failed to escalate suggestion:", err);
           }
         }
       }
@@ -4869,7 +4918,7 @@ export default function App() {
                 </button>
               </div>
               <span className="text-[10px] text-zinc-500 italic ml-2 hidden sm:inline">
-                *Tarefas ficam privadas por 12h antes de se tornarem públicas.
+                *Tarefas ficam privadas por 30min antes de se tornarem públicas.
               </span>
             </div>
             {!isGeneralAdmin && (
