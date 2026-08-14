@@ -4176,7 +4176,7 @@ export default function App() {
                           ? 'bg-red-950 text-red-400 border border-red-700' 
                           : 'bg-amber-950 text-amber-400 border border-amber-700 animate-pulse'
                       }`}>
-                        {userAppeal.status === 'approved' ? 'APROVADA (DESBANIDO)' : userAppeal.status === 'rejected' ? 'REJEITADA' : 'PENDENTE DE ANÁLISE'}
+                        {userAppeal.status === 'approved' ? 'APROVADA (DESBANIDO)' : userAppeal.status === 'rejected' ? 'REJEITADA' : 'EM ANÁLISE'}
                       </span>
                     </div>
                     <p className="text-zinc-300 text-xs italic bg-zinc-900 p-2.5 rounded border border-zinc-800 font-mono">
@@ -4843,32 +4843,9 @@ export default function App() {
 
   // --- ADMIN DASHBOARD ---
   if (view === 'admin' && isAdmin) {
-    const isItemExpired = (item: any) => {
-      const ts = item.assignedAt || item.timestamp;
-      if (!ts) return false;
-      const timeMs = ts.toMillis ? ts.toMillis() : new Date(ts).getTime();
-      const elapsedMin = (Date.now() - timeMs) / (1000 * 60);
-      return elapsedMin >= ADMIN_TASK_DEADLINE_MINUTES;
-    };
-
-    const filteredReports = reports.filter(r => {
-      const isMine = r.assignedAdmin === currentUser?.username;
-      if (adminCaseFilter === 'my_cases') return isMine;
-      // 'all' view: show mine OR any that is expired (public)
-      return isMine || isItemExpired(r);
-    });
-
-    const filteredSuggestions = suggestions.filter(s => {
-      const isMine = s.assignedAdmin === currentUser?.username;
-      if (adminCaseFilter === 'my_cases') return isMine;
-      return isMine || isItemExpired(s);
-    });
-
-    const filteredAppeals = appeals.filter(a => {
-      const isMine = a.assignedAdmin === currentUser?.username;
-      if (adminCaseFilter === 'my_cases') return isMine;
-      return isMine || isItemExpired(a);
-    });
+    const filteredReports = reports.filter(r => r.assignedAdmin === currentUser?.username);
+    const filteredSuggestions = suggestions.filter(s => s.assignedAdmin === currentUser?.username);
+    const filteredAppeals = appeals.filter(a => a.assignedAdmin === currentUser?.username);
 
     return (
       <div className="min-h-[100dvh] bg-black text-emerald-400 font-mono flex flex-col items-center sm:p-4">
@@ -4891,34 +4868,17 @@ export default function App() {
             </button>
           </header>
 
-          {/* Random Case Assignment Filter Bar */}
+          {/* Random Case Assignment Info Bar */}
           <div className="bg-zinc-900/80 border-b border-emerald-900/50 p-3 px-4 sm:px-6 flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Filtrar Sorteio:</span>
-              <div className="flex items-center bg-black border border-emerald-900/80 rounded p-0.5">
-                <button
-                  onClick={() => setAdminCaseFilter('all')}
-                  className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
-                    adminCaseFilter === 'all'
-                      ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  🌐 Casos Públicos ({filteredReports.length + filteredSuggestions.length + filteredAppeals.length})
-                </button>
-                <button
-                  onClick={() => setAdminCaseFilter('my_cases')}
-                  className={`px-3 py-1 text-xs font-bold rounded transition-colors ${
-                    adminCaseFilter === 'my_cases'
-                      ? 'bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-700 shadow-[0_0_10px_rgba(217,70,239,0.3)]'
-                      : 'text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  🎯 Meus Casos ({adminCaseFilter === 'my_cases' ? (filteredReports.length + filteredSuggestions.length + filteredAppeals.length) : (reports.filter(r => r.assignedAdmin === currentUser?.username).length + suggestions.filter(s => s.assignedAdmin === currentUser?.username).length + appeals.filter(a => a.assignedAdmin === currentUser?.username).length)})
-                </button>
+              <div className="flex items-center bg-black border border-emerald-900/80 rounded p-0.5 px-3 py-1">
+                <span className="text-xs font-bold text-fuchsia-300 flex items-center gap-2">
+                  <Target className="w-3.5 h-3.5" />
+                  MEUS CASOS
+                </span>
               </div>
               <span className="text-[10px] text-zinc-500 italic ml-2 hidden sm:inline">
-                *Tarefas ficam privadas por 30min antes de se tornarem públicas.
+                *Tarefas atribuídas via sorteio automático.
               </span>
             </div>
             {!isGeneralAdmin && (
@@ -4934,7 +4894,7 @@ export default function App() {
               <h2 className="text-lg font-bold text-red-400 border-b border-red-900/30 pb-2 mb-4 flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
-                  DENÚNCIAS & AUTO-MODERAÇÃO ({filteredReports.length})
+                  DENÚNCIAS ({filteredReports.length})
                 </span>
               </h2>
               <div className="space-y-4 overflow-y-auto pr-2 scrollbar-thin">
@@ -4953,7 +4913,7 @@ export default function App() {
                                 ? 'bg-fuchsia-950/80 border border-fuchsia-800 text-fuchsia-300'
                                 : 'bg-orange-950/80 border border-orange-800 text-orange-400'
                             }`}>
-                              {rep.type === 'profanity' ? 'AUTO-BANIMENTO' : rep.type === 'auto_moderation' ? 'MODERAÇÃO AUTO' : 'DENÚNCIA'}
+                              {rep.type === 'profanity' ? 'SISTEMA' : rep.type === 'auto_moderation' ? 'SISTEMA' : 'DENÚNCIA'}
                             </span>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
@@ -5074,7 +5034,7 @@ export default function App() {
               <div className="flex justify-between items-center border-b border-amber-900/30 pb-2 mb-4 flex-wrap gap-2">
                 <h2 className="text-lg font-bold text-amber-400 flex items-center gap-2">
                   <Gavel className="w-5 h-5 text-amber-500" />
-                  APELAÇÕES DE BANIMENTO ({filteredAppeals.filter(a => a.status === 'pending').length} pendentes)
+                  APELAÇÕES DE BANIMENTO ({filteredAppeals.filter(a => a.status === 'pending').length})
                 </h2>
               </div>
               <div className="space-y-4 overflow-y-auto pr-2 scrollbar-thin">
@@ -5104,7 +5064,7 @@ export default function App() {
                               app.status === 'rejected' ? 'bg-red-950 text-red-400 border border-red-800' :
                               'bg-amber-950 text-amber-400 border border-amber-800 animate-pulse'
                             }`}>
-                              {app.status}
+                              {app.status === 'pending' ? 'ANÁLISE' : app.status}
                             </span>
                             <button
                               onClick={() => handleDeleteAppeal(app)}
