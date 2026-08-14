@@ -1610,7 +1610,25 @@ export default function App() {
     try {
       if (editingMessageId) {
         // Edit existing message in place
+        // Verify time limit again before saving
         const originalMsg = messages.find(m => m.id === editingMessageId);
+        const now = Date.now();
+        let msgTime = now;
+        
+        if (originalMsg?.timestamp) {
+          msgTime = typeof originalMsg.timestamp.toMillis === 'function' 
+            ? originalMsg.timestamp.toMillis() 
+            : new Date(originalMsg.timestamp).getTime();
+        }
+        
+        const elapsedMin = (now - msgTime) / (1000 * 60);
+        if (elapsedMin > 15) {
+          showAlert('O prazo de 15 minutos para editar esta mensagem expirou.', 'ERRO AO SALVAR', 'error');
+          setEditingMessageId(null);
+          setInputValue('');
+          return;
+        }
+
         const currentEditCount = originalMsg?.editCount || 0;
 
         await updateDoc(doc(db, 'messages', editingMessageId), {
@@ -1620,7 +1638,6 @@ export default function App() {
           editedAt: serverTimestamp()
         });
 
-        showAlert('Mensagem editada com sucesso.', 'MENSAGEM ATUALIZADA', 'success');
         setEditingMessageId(null);
         setInputValue('');
         setStagedAttachment(null);
@@ -5630,20 +5647,32 @@ export default function App() {
                           <button
                             onClick={() => {
                               setOpenMessageMenuId(null);
-                              const editCount = msg.editCount || 0;
-                              if (editCount >= 2) {
-                                showAlert('Esta mensagem já foi editada 2 vezes (limite máximo atingido).', 'LIMITE DE EDIÇÃO', 'warning');
+                              
+                              // WhatsApp Style: 15 minute limit check
+                              const now = Date.now();
+                              const msgTs = msg.timestamp;
+                              let msgTime = now;
+                              if (msgTs) {
+                                msgTime = typeof msgTs.toMillis === 'function' ? msgTs.toMillis() : new Date(msgTs).getTime();
+                              }
+                              const elapsedMin = (now - msgTime) / (1000 * 60);
+                              
+                              if (elapsedMin > 15) {
+                                showAlert('O prazo para editar esta mensagem (15 minutos) expirou.', 'PRAZO EXPIRADO', 'warning');
                                 return;
                               }
+
                               setEditingMessageId(msg.id);
                               setInputValue(msg.text || '');
+                              setStagedAttachment(null);
+                              setIsViewOnce(false);
                               if (textareaRef.current) {
                                 textareaRef.current.focus();
                               }
                             }}
                             className="w-full text-left px-2.5 py-1.5 rounded hover:bg-emerald-950/60 text-emerald-300 flex items-center gap-2 font-bold"
                           >
-                            <Code className="w-3.5 h-3.5 text-emerald-400" />
+                            <Edit2 className="w-3.5 h-3.5 text-emerald-400" />
                             <span>Editar Mensagem</span>
                           </button>
                         )}
@@ -5982,10 +6011,10 @@ export default function App() {
           </div>
           
           {editingMessageId && (
-            <div className="bg-amber-950/90 border border-amber-800/90 p-2 px-3 rounded-t-sm flex items-center justify-between text-xs text-amber-200 mb-1">
+            <div className="bg-emerald-950/90 border border-emerald-800/90 p-2 px-3 rounded-t-sm flex items-center justify-between text-xs text-emerald-200 mb-1 animate-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center gap-2">
-                <Code className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="font-bold">Editando mensagem (máximo 2 edições permitidas)</span>
+                <Edit2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-bold uppercase tracking-tight">Editando mensagem</span>
               </div>
               <button
                 type="button"
@@ -5993,9 +6022,9 @@ export default function App() {
                   setEditingMessageId(null);
                   setInputValue('');
                 }}
-                className="text-amber-400 hover:text-amber-100 font-bold underline text-xs"
+                className="text-emerald-400 hover:text-emerald-100 font-bold underline text-[10px]"
               >
-                Cancelar
+                CANCELAR
               </button>
             </div>
           )}
@@ -6013,9 +6042,10 @@ export default function App() {
             {/* File Attachment */}
             <button
               type="button"
+              disabled={!!editingMessageId}
               onClick={() => fileInputRef.current?.click()}
-              className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30 transition-colors rounded-sm flex items-center justify-center"
-              title="Anexar Arquivo"
+              className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${editingMessageId ? 'opacity-20 cursor-not-allowed border-zinc-800 text-zinc-700' : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'}`}
+              title={editingMessageId ? "Não é possível anexar arquivos ao editar" : "Anexar Arquivo"}
             >
               <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
@@ -6023,13 +6053,16 @@ export default function App() {
             {/* Record Audio Button */}
             <button
               type="button"
+              disabled={!!editingMessageId}
               onClick={toggleRecording}
               className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${
-                isRecording 
-                  ? 'border-red-800 text-red-500 bg-red-950/30 animate-pulse' 
-                  : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'
+                editingMessageId 
+                  ? 'opacity-20 cursor-not-allowed border-zinc-800 text-zinc-700'
+                  : isRecording 
+                    ? 'border-red-800 text-red-500 bg-red-950/30 animate-pulse' 
+                    : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'
               }`}
-              title="Gravar Áudio"
+              title={editingMessageId ? "Não é possível gravar áudio ao editar" : "Gravar Áudio"}
             >
               {isRecording ? <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
