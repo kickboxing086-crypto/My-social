@@ -374,6 +374,7 @@ export default function App() {
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [adminActionId, setAdminActionId] = useState('');
   const [userToDeleteConfirm, setUserToDeleteConfirm] = useState<DevUser | null>(null);
+  const [userToRemoveFromGroup, setUserToRemoveFromGroup] = useState<DevUser | null>(null);
 
   // 2-Step Item Deletion Modal State (Appeals, Suggestions, Reports)
   const [itemToDeleteConfirm, setItemToDeleteConfirm] = useState<{
@@ -1927,6 +1928,30 @@ export default function App() {
     }
   };
 
+  const handleRemoveFromGroupAction = async () => {
+    if (!userToRemoveFromGroup || !currentGroupId) return;
+    try {
+      const groupRef = doc(db, 'groups', currentGroupId);
+      const groupSnap = await getDoc(groupRef);
+      if (groupSnap.exists()) {
+        const groupData = groupSnap.data() as Group;
+        const newMembers = (groupData.members || []).filter(m => m !== userToRemoveFromGroup.username);
+        const newOwners = (groupData.owners || []).filter(m => m !== userToRemoveFromGroup.username);
+        
+        await updateDoc(groupRef, {
+          members: newMembers,
+          owners: newOwners
+        });
+        
+        showAlert(`O usuário @${userToRemoveFromGroup.username} foi removido do grupo com sucesso.`, 'MEMBRO REMOVIDO', 'success');
+      }
+      setUserToRemoveFromGroup(null);
+    } catch (err) {
+      console.error(err);
+      showAlert('Erro ao remover membro do grupo.', 'ERRO', 'error');
+    }
+  };
+
   const confirmBanWithReason = async () => {
     if (!banReasonTarget || !isAdmin) return;
     if (!banReasonInput.trim()) {
@@ -3419,7 +3444,12 @@ export default function App() {
   };
 
   const renderMembersModal = () => {
-    const filteredMembers = allMembers.filter(m =>
+    const currentGrp = currentGroupId ? groups.find(g => g.id === currentGroupId) : null;
+    const groupMembersOnly = currentGroupId && currentGrp 
+      ? allMembers.filter(m => (currentGrp.members || []).includes(m.username))
+      : allMembers;
+
+    const filteredMembers = groupMembersOnly.filter(m =>
       (m.name || '').toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
       (m.username || '').toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
       (m.role || '').toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
@@ -3457,11 +3487,11 @@ export default function App() {
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-emerald-400 tracking-wider flex items-center gap-2">
-                    USUÁRIOS DA COMUNIDADE ({allMembers.length})
+                  <h2 className="text-lg font-bold text-emerald-400 tracking-wider flex items-center gap-2 uppercase">
+                    {currentGroupId ? `MEMBROS DO GRUPO (${groupMembersOnly.length})` : `USUÁRIOS DA COMUNIDADE (${allMembers.length})`}
                   </h2>
                   <p className="text-emerald-700 text-xs font-mono">
-                    Membros registrados no Chat Global e Comunidades
+                    {currentGroupId ? 'Lista de membros que fazem parte deste grupo' : 'Membros registrados no Chat Global e Comunidades'}
                   </p>
                 </div>
               </div>
@@ -3696,6 +3726,19 @@ export default function App() {
                                     </>
                                   )}
                                 </>
+                              )}
+
+                              {currentGroupId && (currentGrp?.owners.includes(currentUser?.username || '') || isAdmin) && !isSelf && (
+                                <button
+                                  onClick={() => {
+                                    setOpenMemberMenuUsername(null);
+                                    setUserToRemoveFromGroup(member);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/60 text-red-300 flex items-center gap-2 font-bold"
+                                >
+                                  <UserX className="w-3.5 h-3.5 text-red-400" />
+                                  <span>Remover do Grupo</span>
+                                </button>
                               )}
 
                               <button
@@ -4089,6 +4132,65 @@ export default function App() {
       </AnimatePresence>
     );
   };
+
+  const renderRemoveFromGroupModal = () => (
+    <AnimatePresence>
+      {userToRemoveFromGroup && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/90 backdrop-blur-md z-[70] flex items-center justify-center p-4 font-mono"
+          onClick={() => setUserToRemoveFromGroup(null)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.85, y: 20 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-950 border border-red-900/80 p-6 max-w-md w-full relative shadow-[0_0_60px_rgba(220,38,38,0.3)] rounded-md"
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 animate-pulse" />
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-red-950 border border-red-800 rounded-full text-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+                <UserX className="w-7 h-7" />
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold text-red-500 tracking-wider">REMOVER DO GRUPO</h2>
+                <p className="text-[10px] text-red-900/80 uppercase font-bold tracking-widest">Procedimento de Expulsão</p>
+              </div>
+            </div>
+
+            <div className="bg-black/60 p-4 rounded border border-red-900/40 mb-6 text-sm">
+              <p className="text-zinc-300 mb-3">
+                Você está prestes a remover o usuário <span className="text-red-400 font-bold">@{userToRemoveFromGroup.username}</span> deste grupo.
+              </p>
+              <p className="text-zinc-400 text-xs italic bg-red-950/20 p-2.5 rounded border border-red-900/20 leading-relaxed">
+                Esta ação removerá o acesso imediato do membro a todas as mensagens e tópicos exclusivos deste grupo. Para retornar, ele precisará de um novo convite válido.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setUserToRemoveFromGroup(null)}
+                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-800 rounded-sm text-xs font-bold transition-all"
+              >
+                CANCELAR
+              </button>
+              <button
+                onClick={handleRemoveFromGroupAction}
+                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-100 border border-red-700 rounded-sm text-xs font-bold transition-all hover:scale-105 shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center gap-2"
+              >
+                <Check className="w-4 h-4" />
+                CONFIRMAR REMOÇÃO
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   const renderAppealReplyModal = () => (
     <AnimatePresence>
@@ -4872,6 +4974,7 @@ export default function App() {
         {renderAppealModal()}
         {renderAppealReplyModal()}
         {renderBanReasonModal()}
+        {renderRemoveFromGroupModal()}
         {renderItemDeleteConfirmModal()}
         {renderGroupTopicsModal()}
       </div>
@@ -5046,10 +5149,12 @@ export default function App() {
             <button
               onClick={() => setShowMembersModal(true)}
               className="px-2 py-1.5 text-emerald-300 bg-emerald-950/40 border border-emerald-800/80 rounded-sm hover:bg-emerald-900/50 transition-colors flex items-center gap-1 text-xs font-bold"
-              title="Ver Membros da Comunidade"
+              title={currentGroupId ? "Ver Membros do Grupo" : "Ver Membros da Comunidade"}
             >
               <Users className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Membros ({allMembers.length})</span>
+              <span className="hidden sm:inline">
+                Membros ({currentGroupId ? (groups.find(g => g.id === currentGroupId)?.members?.length || 0) : allMembers.length})
+              </span>
             </button>
 
             {/* Push Notification Toggle */}
@@ -5167,7 +5272,7 @@ export default function App() {
                       <span>Enviar Sugestão / Ideia</span>
                     </button>
 
-                    {!isAdmin && (
+                    {!isAdmin && currentUser?.isBanned && (
                       <button
                         onClick={() => {
                           setShowHeaderAdminMenu(false);
