@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@keyframes bouncing-bar {
+  0% {
+    transform: scaleY(0.15);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes luxury-glow {
+  0% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.15);
+    border-color: rgba(153, 27, 27, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.45);
+    border-color: rgba(239, 68, 68, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.15);
+    border-color: rgba(153, 27, 27, 0.6);
+  }
+}
+
+.animate-luxury-glow {
+  animation: luxury-glow 2s infinite ease-in-out;
+}

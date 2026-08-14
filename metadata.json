@@ -1,0 +1,8 @@
+{
+  "name": "MY SOCIAL",
+  "description": "Uma rede social para todos os tipos de pessoas se comunicarem.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

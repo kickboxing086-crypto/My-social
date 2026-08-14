@@ -1,0 +1,94 @@
+{
+  "collections": [
+    {
+      "name": "users",
+      "description": "User profiles for developers",
+      "fields": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "name": { "type": "string", "description": "Real name" },
+        "username": { "type": "string", "description": "Username" },
+        "role": { "type": "string", "description": "Job role" },
+        "isBanned": { "type": "boolean", "description": "Flag for banned users", "optional": true },
+        "bannedAt": { "type": "timestamp", "description": "Timestamp when user was banned", "optional": true },
+        "banReason": { "type": "string", "description": "Reason why the user was banned", "optional": true }
+      },
+      "rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null && request.auth.uid == request.resource.data.uid",
+        "update": "request.auth != null",
+        "delete": "false"
+      }
+    },
+    {
+      "name": "messages",
+      "description": "Global chat messages",
+      "fields": {
+        "sender": { "type": "string" },
+        "role": { "type": "string", "optional": true },
+        "text": { "type": "string" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "timestamp" },
+        "attachment": { "type": "map", "optional": true }
+      },
+      "rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "false",
+        "delete": "false"
+      }
+    },
+    {
+      "name": "reports",
+      "description": "User and system reports",
+      "fields": {
+        "type": { "type": "string" },
+        "reportedUser": { "type": "string" },
+        "reportedBy": { "type": "string" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      },
+      "rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "false",
+        "delete": "false"
+      }
+    },
+    {
+      "name": "suggestions",
+      "description": "Suggestions for the admin",
+      "fields": {
+        "sender": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "timestamp" }
+      },
+      "rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "false",
+        "delete": "false"
+      }
+    },
+    {
+      "name": "appeals",
+      "description": "Ban appeals submitted by banned users",
+      "fields": {
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "reason": { "type": "string" },
+        "timestamp": { "type": "timestamp" },
+        "bannedAt": { "type": "timestamp", "optional": true },
+        "status": { "type": "string" },
+        "adminReplyText": { "type": "string", "optional": true },
+        "adminReplyImage": { "type": "string", "optional": true },
+        "repliedAt": { "type": "timestamp", "optional": true }
+      },
+      "rules": {
+        "read": "request.auth != null",
+        "create": "request.auth != null",
+        "update": "request.auth != null",
+        "delete": "request.auth != null"
+      }
+    }
+  ]
+}
