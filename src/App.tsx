@@ -1215,6 +1215,8 @@ export default function App() {
     }
   };
 
+  const ADMIN_TASK_DEADLINE_MINUTES = 720; // 12 hours
+
   const checkAndEscalateReports = async (reportsToProcess: Report[], membersList: DevUser[]) => {
     const now = Date.now();
     for (const rep of reportsToProcess) {
@@ -1235,7 +1237,7 @@ export default function App() {
       }
 
       const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
-      if (elapsedMinutes >= 30) {
+      if (elapsedMinutes >= ADMIN_TASK_DEADLINE_MINUTES) {
         // Find other admins excluding the currently assigned one
         const adminPool = membersList.filter(m => {
           const r = (m.role || '').toLowerCase();
@@ -1284,7 +1286,7 @@ export default function App() {
       }
 
       const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
-      if (elapsedMinutes >= 30) {
+      if (elapsedMinutes >= ADMIN_TASK_DEADLINE_MINUTES) {
         // Find other admins excluding the currently assigned one
         const adminPool = membersList.filter(m => {
           const r = (m.role || '').toLowerCase();
@@ -1518,6 +1520,15 @@ export default function App() {
     }
   }, [userToDeleteConfirm, userToRemoveFromGroup, itemToDeleteConfirm, banReasonTarget]);
 
+  // Auto-expand textarea as user types
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const newHeight = Math.min(textareaRef.current.scrollHeight, window.matchMedia('(max-width: 640px)').matches ? 150 : 250);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputValue]);
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!inputValue.trim() && !stagedAttachment) || !currentUser) return;
@@ -1548,6 +1559,7 @@ export default function App() {
         setInputValue('');
         setStagedAttachment(null);
         setIsViewOnce(false);
+        if (textareaRef.current) textareaRef.current.style.height = '40px';
         return;
       }
 
@@ -1586,6 +1598,7 @@ export default function App() {
       setInputValue('');
       setStagedAttachment(null);
       setIsViewOnce(false);
+      if (textareaRef.current) textareaRef.current.style.height = '40px';
     } catch (err: any) {
       if (err.message?.includes('exceeds the maximum allowed size')) {
         showAlert('O arquivo excede o limite de tamanho permitido (~1MB).', 'TAMANHO EXCESSIVO', 'warning');
@@ -4781,17 +4794,32 @@ export default function App() {
 
   // --- ADMIN DASHBOARD ---
   if (view === 'admin' && isAdmin) {
-    const filteredReports = adminCaseFilter === 'my_cases' 
-      ? reports.filter(r => r.assignedAdmin === currentUser?.username) 
-      : reports;
+    const isItemExpired = (item: any) => {
+      const ts = item.assignedAt || item.timestamp;
+      if (!ts) return false;
+      const timeMs = ts.toMillis ? ts.toMillis() : new Date(ts).getTime();
+      const elapsedMin = (Date.now() - timeMs) / (1000 * 60);
+      return elapsedMin >= ADMIN_TASK_DEADLINE_MINUTES;
+    };
 
-    const filteredSuggestions = adminCaseFilter === 'my_cases' 
-      ? suggestions.filter(s => s.assignedAdmin === currentUser?.username) 
-      : suggestions;
+    const filteredReports = reports.filter(r => {
+      const isMine = r.assignedAdmin === currentUser?.username;
+      if (adminCaseFilter === 'my_cases') return isMine;
+      // 'all' view: show mine OR any that is expired (public)
+      return isMine || isItemExpired(r);
+    });
 
-    const filteredAppeals = adminCaseFilter === 'my_cases' 
-      ? appeals.filter(a => a.assignedAdmin === currentUser?.username) 
-      : appeals;
+    const filteredSuggestions = suggestions.filter(s => {
+      const isMine = s.assignedAdmin === currentUser?.username;
+      if (adminCaseFilter === 'my_cases') return isMine;
+      return isMine || isItemExpired(s);
+    });
+
+    const filteredAppeals = appeals.filter(a => {
+      const isMine = a.assignedAdmin === currentUser?.username;
+      if (adminCaseFilter === 'my_cases') return isMine;
+      return isMine || isItemExpired(a);
+    });
 
     return (
       <div className="min-h-[100dvh] bg-black text-emerald-400 font-mono flex flex-col items-center sm:p-4">
@@ -4827,7 +4855,7 @@ export default function App() {
                       : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  🌐 Todos os Casos ({reports.length + suggestions.length + appeals.length})
+                  🌐 Casos Públicos ({filteredReports.length + filteredSuggestions.length + filteredAppeals.length})
                 </button>
                 <button
                   onClick={() => setAdminCaseFilter('my_cases')}
@@ -4837,9 +4865,12 @@ export default function App() {
                       : 'text-zinc-500 hover:text-zinc-300'
                   }`}
                 >
-                  🎯 Meus Casos Atribuídos (@{currentUser?.username})
+                  🎯 Meus Casos ({adminCaseFilter === 'my_cases' ? (filteredReports.length + filteredSuggestions.length + filteredAppeals.length) : (reports.filter(r => r.assignedAdmin === currentUser?.username).length + suggestions.filter(s => s.assignedAdmin === currentUser?.username).length + appeals.filter(a => a.assignedAdmin === currentUser?.username).length)})
                 </button>
               </div>
+              <span className="text-[10px] text-zinc-500 italic ml-2 hidden sm:inline">
+                *Tarefas ficam privadas por 12h antes de se tornarem públicas.
+              </span>
             </div>
             {!isGeneralAdmin && (
               <div className="text-[11px] text-amber-300/90 bg-amber-950/40 border border-amber-800/50 px-3 py-1 rounded">
@@ -6053,8 +6084,16 @@ export default function App() {
             ) : (
               <textarea
                 ref={textareaRef}
-                rows={2}
+                rows={1}
                 value={inputValue}
+                onFocus={() => {
+                  // Ensure keyboard doesn't cover input on mobile
+                  setTimeout(() => {
+                    if (textareaRef.current) {
+                      textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }, 300);
+                }}
                 onChange={(e) => setInputValue(e.target.value)}
                 maxLength={5000}
                 onKeyDown={(e) => {
@@ -6068,7 +6107,7 @@ export default function App() {
                   }
                 }}
                 placeholder="Transmitir..."
-                className="flex-1 bg-zinc-900/90 border border-emerald-800/80 text-emerald-100 px-3 py-2 sm:px-4 sm:py-3 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all text-sm resize-y min-h-[50px] sm:min-h-[90px] max-h-40 sm:max-h-60 scrollbar-thin scrollbar-thumb-emerald-900 rounded-lg shadow-inner"
+                className="flex-1 bg-zinc-900 border border-emerald-800 text-emerald-100 px-3 py-2 sm:px-4 sm:py-2.5 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all text-sm resize-none min-h-[40px] max-h-40 sm:max-h-60 scrollbar-thin scrollbar-thumb-emerald-900 rounded-lg shadow-inner"
               />
             )}
 
