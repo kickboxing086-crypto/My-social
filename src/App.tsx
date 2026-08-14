@@ -97,6 +97,7 @@ type Appeal = {
   adminReplyImage?: string;
   repliedAt?: any;
   assignedAdmin?: string;
+  assignedAt?: any;
   groupId?: string;
   topic?: string;
 };
@@ -802,19 +803,21 @@ export default function App() {
     }
   }, [currentUser, isAdmin]);
 
-  // Periodic report escalation (checks every 30 seconds for reports pending action for over 30 minutes)
+  // Periodic report and appeal escalation (checks every 30 seconds for items pending action for over 30 minutes)
   useEffect(() => {
-    if (!isAdmin || reports.length === 0 || allMembers.length === 0) return;
+    if (!isAdmin || allMembers.length === 0) return;
 
     const interval = setInterval(() => {
-      checkAndEscalateReports(reports, allMembers);
+      if (reports.length > 0) checkAndEscalateReports(reports, allMembers);
+      if (appeals.length > 0) checkAndEscalateAppeals(appeals, allMembers);
     }, 30000); // Check every 30 seconds
 
     // Run once initially as well
-    checkAndEscalateReports(reports, allMembers);
+    if (reports.length > 0) checkAndEscalateReports(reports, allMembers);
+    if (appeals.length > 0) checkAndEscalateAppeals(appeals, allMembers);
 
     return () => clearInterval(interval);
-  }, [reports, allMembers, isAdmin]);
+  }, [reports, appeals, allMembers, isAdmin]);
 
   // Capture the PWA install event
   useEffect(() => {
@@ -921,6 +924,15 @@ export default function App() {
   };
 
   const handleDeleteMessage = (msgId: string) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (msg) {
+      const msgTime = msg.timestamp ? (typeof msg.timestamp.toMillis === 'function' ? msg.timestamp.toMillis() : new Date(msg.timestamp).getTime()) : Date.now();
+      const isWithin15Min = (Date.now() - msgTime) <= 15 * 60 * 1000;
+      if (!isAdmin && msg.sender === currentUser?.username && !isWithin15Min) {
+        showAlert('As mensagens só podem ser apagadas para todos dentro de 15 minutos após o envio.', 'PRAZO DE EXCLUSÃO EXPIRADO', 'warning');
+        return;
+      }
+    }
     setConfirmDeleteId(msgId);
   };
 
@@ -1230,6 +1242,55 @@ export default function App() {
     }
   };
 
+  const checkAndEscalateAppeals = async (appealsToProcess: Appeal[], membersList: DevUser[]) => {
+    const now = Date.now();
+    for (const app of appealsToProcess) {
+      if (app.status !== 'pending') continue; // Already resolved
+      if (app.adminReplyText) continue; // Already replied
+      
+      // Determine the assignment time
+      let assignedTimeMs = now;
+      if (app.assignedAt) {
+        assignedTimeMs = typeof app.assignedAt.toMillis === 'function' 
+          ? app.assignedAt.toMillis() 
+          : (typeof app.assignedAt === 'number' ? app.assignedAt : new Date(app.assignedAt).getTime());
+      } else if (app.timestamp) {
+        assignedTimeMs = typeof app.timestamp.toMillis === 'function' 
+          ? app.timestamp.toMillis() 
+          : (typeof app.timestamp === 'number' ? app.timestamp : new Date(app.timestamp).getTime());
+      } else {
+        continue; // No timestamp available yet
+      }
+
+      const elapsedMinutes = (now - assignedTimeMs) / (1000 * 60);
+      if (elapsedMinutes >= 30) {
+        // Find other admins excluding the currently assigned one
+        const adminPool = membersList.filter(m => {
+          const r = (m.role || '').toLowerCase();
+          const u = (m.username || '').toLowerCase();
+          const isAdminRole = r === 'administrador geral' || r === 'administrador' || r === 'admin' || u === 'samuellsilvva02';
+          return isAdminRole && m.username !== app.assignedAdmin;
+        });
+
+        if (adminPool.length > 0) {
+          const randomIndex = Math.floor(Math.random() * adminPool.length);
+          const newAdmin = adminPool[randomIndex].username;
+          
+          console.log(`Appeal ${app.id} escalated from @${app.assignedAdmin} to @${newAdmin} after ${Math.round(elapsedMinutes)} minutes.`);
+          
+          try {
+            await updateDoc(doc(db, 'appeals', app.id), {
+              assignedAdmin: newAdmin,
+              assignedAt: serverTimestamp()
+            });
+          } catch (err) {
+            console.error("Failed to escalate appeal:", err);
+          }
+        }
+      }
+    }
+  };
+
   const handleEditTopicInGroup = async (targetGroupId: string, oldTopicName: string, newTopicName: string) => {
     if (oldTopicName.toLowerCase() === 'geral') {
       showAlert('O tópico #Geral é o tópico principal e não pode ser editado.', 'AÇÃO NEGADA', 'warning');
@@ -1435,12 +1496,27 @@ export default function App() {
 
     const textToSend = inputValue.trim();
 
-    if (textToSend && checkProfanity(textToSend)) {
-      await executeAutoBan(textToSend);
-      return;
-    }
-
     try {
+      if (editingMessageId) {
+        // Edit existing message in place
+        const originalMsg = messages.find(m => m.id === editingMessageId);
+        const currentEditCount = originalMsg?.editCount || 0;
+
+        await updateDoc(doc(db, 'messages', editingMessageId), {
+          text: textToSend,
+          isEdited: true,
+          editCount: currentEditCount + 1,
+          editedAt: serverTimestamp()
+        });
+
+        showAlert('Mensagem editada com sucesso.', 'MENSAGEM ATUALIZADA', 'success');
+        setEditingMessageId(null);
+        setInputValue('');
+        setStagedAttachment(null);
+        setIsViewOnce(false);
+        return;
+      }
+
       const messageData: any = {
         sender: currentUser.username,
         role: currentUser.role,
@@ -2169,29 +2245,7 @@ export default function App() {
   };
 
   const triggerAutoModerationReport = async (userToReport: string, reasonText: string, mediaUrl?: string) => {
-    try {
-      const assignedAdmin = getRandomAssignedAdmin(allMembers);
-      await addDoc(collection(db, 'reports'), {
-        type: 'auto_moderation',
-        reportedUser: userToReport,
-        reportedBy: 'SISTEMA AUTÔNOMO',
-        reason: reasonText,
-        assignedAdmin,
-        attachmentUrl: mediaUrl || '',
-        groupId: currentGroupId || "global",
-        topic: currentGroupId ? (currentTopic || 'Geral') : 'Geral',
-        timestamp: serverTimestamp(),
-        assignedAt: serverTimestamp()
-      });
-      if (assignedAdmin === currentUser?.username) {
-        setPushToast({
-          sender: 'MODERAÇÃO AUTOMÁTICA',
-          text: `🚨 Novo conteúdo/mídia de @${userToReport} atribuído a você para análise!`
-        });
-      }
-    } catch (e) {
-      console.error('Erro ao registrar moderação automática:', e);
-    }
+    // Auto-moderation disabled by request.
   };
 
   const submitReport = async () => {
@@ -4817,6 +4871,8 @@ export default function App() {
         {renderPushToast()}
         {renderAppealModal()}
         {renderAppealReplyModal()}
+        {renderBanReasonModal()}
+        {renderItemDeleteConfirmModal()}
         {renderGroupTopicsModal()}
       </div>
     );
@@ -5350,18 +5406,24 @@ export default function App() {
                         )}
 
                         {/* Delete option */}
-                        {(msg.sender === currentUser?.username || isAdmin) && (
-                          <button
-                            onClick={() => {
-                              setOpenMessageMenuId(null);
-                              handleDeleteMessage(msg.id);
-                            }}
-                            className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/60 text-red-300 flex items-center gap-2 font-bold"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                            <span>Apagar Mensagem</span>
-                          </button>
-                        )}
+                        {(() => {
+                          const msgTime = msg.timestamp ? (typeof msg.timestamp.toMillis === 'function' ? msg.timestamp.toMillis() : new Date(msg.timestamp).getTime()) : Date.now();
+                          const isWithin15Min = (Date.now() - msgTime) <= 15 * 60 * 1000;
+                          const showDelete = isAdmin || (msg.sender === currentUser?.username && isWithin15Min);
+                          if (!showDelete) return null;
+                          return (
+                            <button
+                              onClick={() => {
+                                setOpenMessageMenuId(null);
+                                handleDeleteMessage(msg.id);
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/60 text-red-300 flex items-center gap-2 font-bold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                              <span>Apagar Mensagem</span>
+                            </button>
+                          );
+                        })()}
 
                         {/* Admin Purge option */}
                         {isAdmin && (
@@ -5783,7 +5845,7 @@ export default function App() {
             ) : (
               <textarea
                 ref={textareaRef}
-                rows={1}
+                rows={3}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 maxLength={5000}
@@ -5798,7 +5860,7 @@ export default function App() {
                   }
                 }}
                 placeholder="Transmitir mensagem..."
-                className="flex-1 bg-black border border-emerald-800 text-emerald-200 px-3 py-2.5 focus:outline-none focus:border-emerald-400 transition-colors text-sm resize-none min-h-[40px] max-h-28 scrollbar-thin scrollbar-thumb-emerald-900 rounded-sm"
+                className="flex-1 bg-zinc-900/90 border border-emerald-800/80 text-emerald-100 px-4 py-3 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all text-sm resize-y min-h-[90px] max-h-60 scrollbar-thin scrollbar-thumb-emerald-900 rounded-lg shadow-inner"
               />
             )}
 
