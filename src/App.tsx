@@ -375,6 +375,7 @@ export default function App() {
   const [adminActionId, setAdminActionId] = useState('');
   const [userToDeleteConfirm, setUserToDeleteConfirm] = useState<DevUser | null>(null);
   const [userToRemoveFromGroup, setUserToRemoveFromGroup] = useState<DevUser | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
   // 2-Step Item Deletion Modal State (Appeals, Suggestions, Reports)
   const [itemToDeleteConfirm, setItemToDeleteConfirm] = useState<{
@@ -1145,6 +1146,13 @@ export default function App() {
     const groupObj = groups.find(g => g.id === targetGroupId);
     if (!groupObj) return;
 
+    // Apenas Administradores do Grupo podem gerenciar tópicos
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) {
+      showAlert('Apenas administradores do grupo podem criar tópicos.', 'ACESSO NEGADO', 'error');
+      return;
+    }
+
     const currentTopics = groupObj.topics || ['Geral'];
     if (currentTopics.some(t => t.toLowerCase() === cleanTopic.toLowerCase())) {
       showAlert(`O tópico #${cleanTopic} já existe neste grupo.`, 'TÓPICO EXISTENTE', 'warning');
@@ -1173,10 +1181,22 @@ export default function App() {
       showAlert('O tópico #Geral é o tópico principal e não pode ser removido.', 'AÇÃO NEGADA', 'warning');
       return;
     }
-    if (!confirm(`Deseja remover o tópico #${topicToRemove} do grupo?`)) return;
 
     const groupObj = groups.find(g => g.id === targetGroupId);
     if (!groupObj) return;
+
+    // Apenas Administradores do Grupo podem gerenciar tópicos
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) {
+      showAlert('Apenas administradores do grupo podem remover tópicos.', 'ACESSO NEGADO', 'error');
+      return;
+    }
+
+    const confirmation = window.prompt(`Para remover o tópico #${topicToRemove}, digite APAGAR abaixo:`);
+    if (confirmation !== 'APAGAR') {
+      if (confirmation !== null) showAlert('Confirmação inválida. Digite APAGAR exatamente.', 'ERRO', 'error');
+      return;
+    }
 
     const newTopics = (groupObj.topics || ['Geral']).filter(t => t !== topicToRemove);
     try {
@@ -1298,6 +1318,16 @@ export default function App() {
       return;
     }
 
+    const groupObj = groups.find(g => g.id === targetGroupId);
+    if (!groupObj) return;
+
+    // Apenas Administradores do Grupo podem gerenciar tópicos
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) {
+      showAlert('Apenas administradores do grupo podem editar tópicos.', 'ACESSO NEGADO', 'error');
+      return;
+    }
+
     const cleanTopic = newTopicName.trim().replace(/^#+/, '');
     if (!cleanTopic) {
       showAlert('Por favor, digite o novo nome do tópico.', 'CAMPO OBRIGATÓRIO', 'warning');
@@ -1307,9 +1337,6 @@ export default function App() {
     if (cleanTopic.toLowerCase() === oldTopicName.toLowerCase()) {
       return; // No actual change
     }
-
-    const groupObj = groups.find(g => g.id === targetGroupId);
-    if (!groupObj) return;
 
     const currentTopics = groupObj.topics || ['Geral'];
     if (currentTopics.some(t => t.toLowerCase() === cleanTopic.toLowerCase() && t.toLowerCase() !== oldTopicName.toLowerCase())) {
@@ -1484,6 +1511,12 @@ export default function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!userToDeleteConfirm && !userToRemoveFromGroup && !itemToDeleteConfirm && !banReasonTarget) {
+      setDeleteConfirmText('');
+    }
+  }, [userToDeleteConfirm, userToRemoveFromGroup, itemToDeleteConfirm, banReasonTarget]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2710,44 +2743,46 @@ export default function App() {
                 })}
               </div>
 
-              {/* Opção Criar Tópico */}
-              <div className="pt-4 border-t border-emerald-900/40">
-                <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-wider text-[10px]">
-                  Criar Novo Tópico
-                </h4>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newTopicName}
-                    onChange={(e) => setNewTopicName(e.target.value)}
-                    placeholder="Nome do tópico (ex: Projetos)..."
-                    maxLength={25}
-                    className="flex-1 bg-zinc-900 border border-emerald-900 text-emerald-200 px-3 py-2 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
+              {/* Opção Criar Tópico - Apenas Administradores do Grupo */}
+              {((group as any).owner === currentUser?.username || isGeneralAdmin) && (
+                <div className="pt-4 border-t border-emerald-900/40">
+                  <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-wider text-[10px]">
+                    Criar Novo Tópico
+                  </h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTopicName}
+                      onChange={(e) => setNewTopicName(e.target.value)}
+                      placeholder="Nome do tópico (ex: Projetos)..."
+                      maxLength={25}
+                      className="flex-1 bg-zinc-900 border border-emerald-900 text-emerald-200 px-3 py-2 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (newTopicName.trim()) {
+                            handleAddTopicToGroup(group.id, newTopicName);
+                            setNewTopicName('');
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
                         if (newTopicName.trim()) {
                           handleAddTopicToGroup(group.id, newTopicName);
                           setNewTopicName('');
+                        } else {
+                          showAlert('Por favor, digite um nome válido para o tópico.', 'CAMPO VAZIO', 'warning');
                         }
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      if (newTopicName.trim()) {
-                        handleAddTopicToGroup(group.id, newTopicName);
-                        setNewTopicName('');
-                      } else {
-                        showAlert('Por favor, digite um nome válido para o tópico.', 'CAMPO VAZIO', 'warning');
-                      }
-                    }}
-                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors shrink-0"
-                  >
-                    Criar Tópico
-                  </button>
+                      }}
+                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors shrink-0"
+                    >
+                      Criar Tópico
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </motion.div>
           </div>
         )}
@@ -2984,14 +3019,14 @@ export default function App() {
             exit={{ opacity: 0, scale: 0.88, y: 15 }} 
             transition={{ type: "spring", stiffness: 350, damping: 25 }} 
             onClick={(e) => e.stopPropagation()} 
-            className="bg-zinc-950 border border-red-900/60 p-6 max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.2)] rounded-md"
+            className="bg-zinc-950 border border-red-900/60 p-4 sm:p-6 max-w-md w-full relative shadow-[0_0_50px_rgba(239,68,68,0.2)] rounded-md"
           >
             <button onClick={() => { setReportTarget(null); setReportReason(''); }} className="absolute top-4 right-4 text-zinc-500 hover:text-red-400">
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3 mb-4">
-              <Flag className="w-6 h-6 text-red-500" />
-              <h2 className="text-lg font-bold text-red-400">Denunciar Usuário</h2>
+              <Flag className="w-5 h-5 sm:w-6 sm:h-6 text-red-500" />
+              <h2 className="text-base sm:text-lg font-bold text-red-400">Denunciar Usuário</h2>
             </div>
             <p className="text-zinc-400 text-sm mb-4">
               Reportando o usuário <strong className="text-white">[{reportTarget}]</strong>. Descreva o motivo abaixo:
@@ -3039,14 +3074,14 @@ export default function App() {
             exit={{ opacity: 0, scale: 0.88, y: 15 }} 
             transition={{ type: "spring", stiffness: 350, damping: 25 }} 
             onClick={(e) => e.stopPropagation()} 
-            className="bg-zinc-950 border border-blue-900/60 p-6 max-w-md w-full relative shadow-[0_0_50px_rgba(59,130,246,0.2)] rounded-md"
+            className="bg-zinc-950 border border-blue-900/60 p-4 sm:p-6 max-w-md w-full relative shadow-[0_0_50px_rgba(59,130,246,0.2)] rounded-md"
           >
             <button onClick={() => { setShowSuggestionModal(false); setSuggestionText(''); }} className="absolute top-4 right-4 text-zinc-500 hover:text-blue-400">
               <X className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-3 mb-4">
-              <Lightbulb className="w-6 h-6 text-blue-500" />
-              <h2 className="text-lg font-bold text-blue-400">Enviar Sugestão</h2>
+              <Lightbulb className="w-5 h-5 sm:w-6 sm:h-6 text-blue-500" />
+              <h2 className="text-base sm:text-lg font-bold text-blue-400">Enviar Sugestão</h2>
             </div>
             <p className="text-zinc-400 text-sm mb-4">
               Tem alguma ideia de melhoria para o My social? Envie diretamente para a administração.
@@ -3083,9 +3118,9 @@ export default function App() {
       <AnimatePresence>
         {showCreateGroupModal && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-zinc-950 border border-emerald-900/50 p-6 rounded-sm w-full max-w-md shadow-2xl">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-zinc-950 border border-emerald-900/50 p-4 sm:p-6 rounded-sm w-full max-w-md shadow-2xl">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-emerald-400 flex items-center gap-2"><Users className="w-5 h-5 text-emerald-400" /> Criar Novo Grupo / Comunidade</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-emerald-400 flex items-center gap-2"><Users className="w-5 h-5 text-emerald-400" /> Criar Novo Grupo</h2>
                 <button onClick={() => setShowCreateGroupModal(false)} className="text-emerald-700 hover:text-emerald-400"><X className="w-5 h-5" /></button>
               </div>
               <form onSubmit={handleCreateGroup} className="space-y-4">
@@ -3107,9 +3142,9 @@ export default function App() {
         
         {showJoinGroupModal && (
           <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100] backdrop-blur-sm">
-            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-zinc-950 border border-emerald-900/50 p-6 rounded-sm w-full max-w-md shadow-2xl">
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="bg-zinc-950 border border-emerald-900/50 p-4 sm:p-6 rounded-sm w-full max-w-md shadow-2xl">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-bold text-emerald-400 flex items-center gap-2"><LinkIcon className="w-5 h-5" /> Entrar em um Grupo</h2>
+                <h2 className="text-lg sm:text-xl font-bold text-emerald-400 flex items-center gap-2"><LinkIcon className="w-5 h-5" /> Entrar em um Grupo</h2>
                 <button onClick={() => setShowJoinGroupModal(false)} className="text-emerald-700 hover:text-emerald-400"><X className="w-5 h-5" /></button>
               </div>
               <form onSubmit={handleJoinGroup} className="space-y-4">
@@ -3873,6 +3908,19 @@ export default function App() {
               <span className="text-red-400 font-bold">â ï¸ Esta ação irá expurgar a credencial do usuário e TODAS as suas mensagens no chat!</span>
             </p>
 
+            <div className="mb-6">
+              <label className="block text-[10px] text-red-500 font-bold mb-1 uppercase tracking-widest">
+                Para confirmar a exclusão, digite APAGAR abaixo:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite APAGAR..."
+                className="w-full bg-black border border-red-900/60 text-red-100 px-3 py-2 text-xs rounded focus:outline-none focus:border-red-500 font-mono"
+              />
+            </div>
+
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setUserToDeleteConfirm(null)}
@@ -3882,7 +3930,8 @@ export default function App() {
               </button>
               <button
                 onClick={executeDeleteUserAccount}
-                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-700 rounded-sm text-xs font-bold transition-all hover:scale-105 shadow-[0_0_15px_rgba(220,38,38,0.4)] flex items-center gap-2"
+                disabled={deleteConfirmText !== 'APAGAR'}
+                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-700 rounded-sm text-xs font-bold transition-all hover:scale-105 shadow-[0_0_15px_rgba(220,38,38,0.4)] flex items-center gap-2 disabled:opacity-40 disabled:hover:scale-100"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 EXCLUIR DEFINITIVAMENTE
@@ -4001,7 +4050,7 @@ export default function App() {
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: "spring", stiffness: 350, damping: 25 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-zinc-950 border border-amber-800 p-6 max-w-lg w-full rounded shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-mono max-h-[90vh] overflow-y-auto"
+              className="bg-zinc-950 border border-amber-800 p-4 sm:p-6 max-w-lg w-full rounded shadow-[0_0_50px_rgba(245,158,11,0.25)] relative text-mono max-h-[90vh] overflow-y-auto"
             >
               <button 
                 onClick={() => setShowAppealModal(false)} 
@@ -4011,14 +4060,14 @@ export default function App() {
               </button>
 
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2.5 bg-amber-950/80 border border-amber-800 rounded-full text-amber-500">
-                  <Gavel className="w-6 h-6" />
+                <div className="p-2 sm:p-2.5 bg-amber-950/80 border border-amber-800 rounded-full text-amber-500">
+                  <Gavel className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <div>
-                  <h2 className="text-base font-extrabold text-amber-400 tracking-wider">RECURSO DE APELAÇÃO DE BANIMENTO</h2>
-                  <p className="text-[11px] text-amber-600 font-mono flex items-center gap-1.5 mt-0.5">
+                  <h2 className="text-sm sm:text-base font-extrabold text-amber-400 tracking-wider uppercase">Apelação de Banimento</h2>
+                  <p className="text-[10px] sm:text-[11px] text-amber-600 font-mono flex items-center gap-1.5 mt-0.5">
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    PRAZO PARA EXCLUSÃO DA CONTA: <strong className="text-amber-300 font-bold">{daysRemaining} DIA(S) RESTANTE(S)</strong>
+                    EXCLUSÃO EM: <strong className="text-amber-300 font-bold">{daysRemaining} DIA(S)</strong>
                   </p>
                 </div>
               </div>
@@ -4149,26 +4198,39 @@ export default function App() {
             exit={{ opacity: 0, scale: 0.85, y: 20 }}
             transition={{ type: "spring", stiffness: 350, damping: 25 }}
             onClick={(e) => e.stopPropagation()}
-            className="bg-zinc-950 border border-red-900/80 p-6 max-w-md w-full relative shadow-[0_0_60px_rgba(220,38,38,0.3)] rounded-md"
+            className="bg-zinc-950 border border-red-900/80 p-4 sm:p-6 max-w-md w-full relative shadow-[0_0_60px_rgba(220,38,38,0.3)] rounded-md"
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 animate-pulse" />
-            <div className="flex items-center gap-4 mb-6">
-              <div className="p-3 bg-red-950 border border-red-800 rounded-full text-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]">
-                <UserX className="w-7 h-7" />
+            <div className="flex items-center gap-3 sm:gap-4 mb-6">
+              <div className="p-2 sm:p-3 bg-red-950 border border-red-800 rounded-full text-red-500 shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+                <UserX className="w-5 h-5 sm:w-7 sm:h-7" />
               </div>
               <div>
-                <h2 className="text-lg font-extrabold text-red-500 tracking-wider">REMOVER DO GRUPO</h2>
-                <p className="text-[10px] text-red-900/80 uppercase font-bold tracking-widest">Procedimento de Expulsão</p>
+                <h2 className="text-base sm:text-lg font-extrabold text-red-500 tracking-wider uppercase">Remover do Grupo</h2>
+                <p className="text-[9px] sm:text-[10px] text-red-900/80 uppercase font-bold tracking-widest">Expulsão de Membro</p>
               </div>
             </div>
 
-            <div className="bg-black/60 p-4 rounded border border-red-900/40 mb-6 text-sm">
+            <div className="bg-black/60 p-4 rounded border border-red-900/40 mb-4 text-sm">
               <p className="text-zinc-300 mb-3">
                 Você está prestes a remover o usuário <span className="text-red-400 font-bold">@{userToRemoveFromGroup.username}</span> deste grupo.
               </p>
               <p className="text-zinc-400 text-xs italic bg-red-950/20 p-2.5 rounded border border-red-900/20 leading-relaxed">
                 Esta ação removerá o acesso imediato do membro a todas as mensagens e tópicos exclusivos deste grupo. Para retornar, ele precisará de um novo convite válido.
               </p>
+            </div>
+
+            <div className="mb-6">
+              <label className="block text-[10px] text-red-500 font-bold mb-1 uppercase tracking-widest">
+                Para confirmar, digite APAGAR abaixo:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite APAGAR..."
+                className="w-full bg-black border border-red-900/60 text-red-100 px-3 py-2 text-xs rounded focus:outline-none focus:border-red-500 font-mono"
+              />
             </div>
 
             <div className="flex items-center justify-end gap-3">
@@ -4180,7 +4242,8 @@ export default function App() {
               </button>
               <button
                 onClick={handleRemoveFromGroupAction}
-                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-100 border border-red-700 rounded-sm text-xs font-bold transition-all hover:scale-105 shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center gap-2"
+                disabled={deleteConfirmText !== 'APAGAR'}
+                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-100 border border-red-700 rounded-sm text-xs font-bold transition-all hover:scale-105 shadow-[0_0_20px_rgba(220,38,38,0.3)] flex items-center gap-2 disabled:opacity-40 disabled:hover:scale-100"
               >
                 <Check className="w-4 h-4" />
                 CONFIRMAR REMOÇÃO
@@ -4378,6 +4441,19 @@ export default function App() {
               </span>
             </div>
             
+            <div className="mb-4">
+              <label className="block text-[10px] text-amber-500 font-bold mb-1 uppercase tracking-widest">
+                Para confirmar o banimento, digite APAGAR abaixo:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite APAGAR..."
+                className="w-full bg-black border border-amber-900/60 text-amber-100 px-3 py-2 text-xs rounded focus:outline-none focus:border-amber-500 font-mono"
+              />
+            </div>
+            
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => { setBanReasonTarget(null); setBanReasonInput(''); }}
@@ -4387,7 +4463,7 @@ export default function App() {
               </button>
               <button 
                 onClick={confirmBanWithReason}
-                disabled={!banReasonInput.trim()}
+                disabled={!banReasonInput.trim() || deleteConfirmText !== 'APAGAR'}
                 className="px-5 py-2 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700 font-bold transition-all disabled:opacity-50 rounded text-xs shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-2"
               >
                 <ShieldAlert className="w-4 h-4 text-amber-400" />
@@ -4462,6 +4538,20 @@ export default function App() {
               </p>
             </div>
 
+            {/* Confirmação Safeguard */}
+            <div className="mb-6">
+              <label className="block text-[10px] text-red-500 font-bold mb-1 uppercase tracking-widest">
+                Para confirmar a exclusão, digite APAGAR abaixo:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Digite APAGAR..."
+                className="w-full bg-black border border-red-900/60 text-red-100 px-3 py-2 text-xs rounded focus:outline-none focus:border-red-500 font-mono"
+              />
+            </div>
+
             <div className="flex items-center justify-end gap-3">
               <button
                 onClick={() => setItemToDeleteConfirm(null)}
@@ -4471,7 +4561,8 @@ export default function App() {
               </button>
               <button
                 onClick={executeDeleteItemTarget}
-                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-700 font-bold transition-all rounded text-xs shadow-[0_0_15px_rgba(239,68,68,0.3)] flex items-center gap-2"
+                disabled={deleteConfirmText !== 'APAGAR'}
+                className="px-5 py-2 bg-red-950 hover:bg-red-900 text-red-200 border border-red-700 font-bold transition-all rounded text-xs shadow-[0_0_15px_rgba(239,68,68,0.3)] flex items-center gap-2 disabled:opacity-40"
               >
                 <Trash2 className="w-4 h-4 text-red-400" />
                 SIM, CONFIRMAR EXCLUSÃO
@@ -4981,8 +5072,8 @@ export default function App() {
     );
   }// --- CHAT VIEW ---
   return (
-    <div className="min-h-screen bg-black text-emerald-400 font-mono flex flex-col items-center p-2 sm:p-4">
-      <div className="w-full max-w-5xl h-[100dvh] sm:h-[95vh] flex flex-col sm:border border-emerald-900/50 bg-zinc-950 sm:rounded-sm relative overflow-hidden sm:shadow-2xl">
+    <div className="h-[100dvh] bg-black text-emerald-400 font-mono flex flex-col items-center sm:p-4 overflow-hidden">
+      <div className="w-full max-w-5xl h-full sm:h-[95vh] flex flex-col sm:border border-emerald-900/50 bg-zinc-950 sm:rounded-sm relative overflow-hidden sm:shadow-2xl">
         
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-30 z-10"></div>
 
@@ -5055,9 +5146,9 @@ export default function App() {
         </AnimatePresence>
 
         {/* Unified & Organized Top Header */}
-        <header className="bg-zinc-950 border-b border-emerald-900/60 px-3 py-2.5 flex items-center justify-between shrink-0 relative z-30 gap-2 font-mono">
+        <header className="bg-zinc-950 border-b border-emerald-900/60 px-2 sm:px-3 py-1.5 sm:py-2.5 flex items-center justify-between shrink-0 relative z-30 gap-1.5 sm:gap-2 font-mono">
           {/* Left Navigation & Active Location */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
             <button
               onClick={() => setShowGroupsMenu(true)}
               className="p-1.5 sm:px-2.5 bg-emerald-950/60 border border-emerald-800/80 rounded-sm hover:bg-emerald-900/60 transition-colors text-emerald-300 flex items-center gap-1.5 text-xs font-bold shrink-0"
@@ -5071,33 +5162,33 @@ export default function App() {
 
             {/* Organized Group / Location Banner Display */}
             {!currentGroupId ? (
-              <div className="flex items-center gap-2 min-w-0 bg-emerald-950/40 border border-emerald-900/60 px-2.5 py-1 rounded-sm">
-                <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded-sm">
+                <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-extrabold text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="font-extrabold text-[10px] sm:text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL</span>
+                    <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                   </div>
-                  <span className="text-[10px] text-emerald-500 font-mono hidden sm:inline truncate">Canal Principal de Comunicação</span>
+                  <span className="text-[9px] sm:text-[10px] text-emerald-500 font-mono hidden xs:inline truncate">Canal Principal</span>
                 </div>
               </div>
             ) : (
               <button
                 onClick={() => setShowGroupTopicsModal(true)}
-                className="flex items-center gap-2 min-w-0 bg-emerald-950/60 hover:bg-emerald-900/40 border border-emerald-800/80 px-2.5 py-1 rounded-sm cursor-pointer transition-colors text-left"
+                className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/60 hover:bg-emerald-900/40 border border-emerald-800/80 px-2 py-1 rounded-sm cursor-pointer transition-colors text-left"
                 title="Clique para ver os tópicos e gerenciar"
               >
-                <Users className="w-4 h-4 text-emerald-400 shrink-0" />
+                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
                 <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="text-[10px] text-emerald-500 uppercase font-bold hidden xs:inline shrink-0">GRUPO:</span>
-                    <span className="font-extrabold text-xs text-emerald-200 tracking-wider truncate">
+                  <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-[9px] sm:text-[10px] text-emerald-500 uppercase font-bold hidden md:inline shrink-0">GRUPO:</span>
+                    <span className="font-extrabold text-[10px] sm:text-xs text-emerald-200 tracking-wider truncate">
                       {groups.find(g => g.id === currentGroupId)?.name}
                     </span>
                     <Hash className="w-3 h-3 text-emerald-400 shrink-0 ml-1 animate-pulse" />
                   </div>
-                  <span className="text-[10px] text-emerald-400 font-mono truncate">
-                    Tópico: #{currentTopic || 'Geral'} (Clique para mudar)
+                  <span className="text-[9px] sm:text-[10px] text-emerald-400 font-mono truncate">
+                    #{currentTopic || 'Geral'}
                   </span>
                 </div>
               </button>
@@ -5741,21 +5832,21 @@ export default function App() {
         </div>
 
         {currentUser?.isBanned && (
-          <div className="bg-amber-950/90 border-t border-b border-amber-800 p-3 flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-amber-200 z-20 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 animate-bounce" />
-              <span>Sua conta está BANIDA. Envio de áudios, textos e mídias está bloqueado.</span>
+          <div className="bg-amber-950/90 border-t border-b border-amber-800 p-2 sm:p-3 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs font-mono text-amber-200 z-20 shrink-0">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0 animate-bounce" />
+              <span>Conta BANIDA. Envio bloqueado.</span>
             </div>
             <button
               onClick={() => setShowAppealModal(true)}
-              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded text-xs transition-colors shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.4)]"
+              className="px-2 py-1 sm:px-3 sm:py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded text-[10px] sm:text-xs transition-colors shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.4)]"
             >
-              ENVIAR / VER APELAÇÃO
+              APELAR
             </button>
           </div>
         )}
 
-        <div className="p-2 sm:p-3 bg-zinc-900 border-t border-emerald-900/50 shrink-0 relative z-20">
+        <div className="p-1.5 sm:p-3 bg-zinc-900 border-t border-emerald-900/50 shrink-0 relative z-20">
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -5764,8 +5855,8 @@ export default function App() {
           />
 
           {stagedAttachment && (
-            <div className="bg-black/90 border border-emerald-800/80 p-2 px-3 rounded mb-2 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-1 duration-200">
-              <div className="flex items-center gap-3 min-w-0">
+            <div className="bg-black/90 border border-emerald-800/80 p-1.5 sm:p-2 px-2.5 sm:px-3 rounded mb-1.5 sm:mb-2 flex items-center justify-between gap-2 sm:gap-3 animate-in slide-in-from-bottom-1 duration-200">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                 {stagedAttachment.fileType === 'image' ? (
                   <button
                     type="button"
@@ -5779,20 +5870,20 @@ export default function App() {
                     <img
                       src={stagedAttachment.url}
                       alt="Preview"
-                      className="w-10 h-10 rounded border border-emerald-800 object-cover hover:opacity-80 transition-opacity animate-pulse"
+                      className="w-8 h-8 sm:w-10 sm:h-10 rounded border border-emerald-800 object-cover hover:opacity-80 transition-opacity animate-pulse"
                     />
                   </button>
                 ) : (
-                  <div className="w-10 h-10 rounded border border-emerald-800 bg-emerald-950/20 flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5 text-emerald-400" />
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded border border-emerald-800 bg-emerald-950/20 flex items-center justify-center shrink-0">
+                    <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400" />
                   </div>
                 )}
                 <div className="min-w-0 font-mono text-left animate-pulse">
-                  <p className="text-xs text-emerald-300 font-bold truncate max-w-[150px] sm:max-w-[350px]">
+                  <p className="text-[10px] sm:text-xs text-emerald-300 font-bold truncate max-w-[120px] sm:max-w-[350px]">
                     {stagedAttachment.name}
                   </p>
-                  <p className="text-[9px] text-emerald-600 uppercase tracking-widest font-extrabold">
-                    {stagedAttachment.fileType === 'image' ? 'Imagem Carregada (Opcional: digite legenda)' : 'Documento Carregado'}
+                  <p className="text-[8px] sm:text-[9px] text-emerald-600 uppercase tracking-widest font-extrabold">
+                    {stagedAttachment.fileType === 'image' ? 'Imagem Carregada' : 'Documento Carregado'}
                   </p>
                 </div>
               </div>
@@ -5800,10 +5891,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setStagedAttachment(null)}
-                  className="p-1.5 text-red-400 hover:text-red-200 bg-red-950/40 border border-red-900/60 rounded transition-colors"
+                  className="p-1 sm:p-1.5 text-red-400 hover:text-red-200 bg-red-950/40 border border-red-900/60 rounded transition-colors"
                   title="Remover anexo"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </button>
               </div>
             </div>
@@ -5833,82 +5924,79 @@ export default function App() {
               </button>
             </div>
           )}
-          <form onSubmit={handleSendMessage} className="flex items-end gap-1.5 sm:gap-2 relative">
+          <form onSubmit={handleSendMessage} className="flex items-end gap-1 sm:gap-2 relative">
             {/* View Once Toggle */}
             <button
               type="button"
               onClick={() => setIsViewOnce(!isViewOnce)}
-              className={`w-10 h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${isViewOnce ? 'border-amber-700 text-amber-500 bg-amber-950/20' : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'}`}
+              className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${isViewOnce ? 'border-amber-700 text-amber-500 bg-amber-950/20' : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'}`}
               title={isViewOnce ? "Visualização única ATIVADA" : "Visualização única DESATIVADA"}
             >
-              {isViewOnce ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {isViewOnce ? <EyeOff className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
 
             {/* File Attachment */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 shrink-0 bg-black border border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30 transition-colors rounded-sm flex items-center justify-center"
+              className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30 transition-colors rounded-sm flex items-center justify-center"
               title="Anexar Arquivo"
             >
-              <Paperclip className="w-4 h-4" />
+              <Paperclip className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
             
             {/* Record Audio Button */}
             <button
               type="button"
               onClick={toggleRecording}
-              className={`w-10 h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${
+              className={`w-9 h-9 sm:w-10 sm:h-10 shrink-0 bg-black border transition-colors rounded-sm flex items-center justify-center ${
                 isRecording 
                   ? 'border-red-800 text-red-500 bg-red-950/30 animate-pulse' 
                   : 'border-emerald-800/80 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-900/30'
               }`}
               title="Gravar Áudio"
             >
-              {isRecording ? <Square className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              {isRecording ? <Square className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             </button>
             
             {isRecording ? (
               audioPreviewUrl ? (
-                <div className="flex-1 flex items-center gap-2 bg-black border border-emerald-800/50 p-2 rounded-sm min-w-0">
+                <div className="flex-1 flex items-center gap-1.5 sm:gap-2 bg-black border border-emerald-800/50 p-1.5 sm:p-2 rounded-sm min-w-0">
                   <div className="flex-1 min-w-0">
-                    <AudioPlayer src={audioPreviewUrl} name='Mensagem de voz' />
+                    <AudioPlayer src={audioPreviewUrl} name='Voz' />
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       onClick={cancelRecording}
-                      className="text-red-500 hover:text-red-300 p-2 bg-red-950/30 rounded-full border border-red-900/50 transition-colors"
-                      title="Descartar gravação"
+                      className="text-red-500 hover:text-red-300 p-1.5 sm:p-2 bg-red-950/30 rounded-full border border-red-900/50 transition-colors"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button
                       type="button"
                       onClick={sendAudioPreview}
-                      className="text-emerald-950 bg-emerald-500 hover:bg-emerald-400 p-2 rounded-full transition-transform active:scale-95"
-                      title="Enviar áudio"
+                      className="text-emerald-950 bg-emerald-500 hover:bg-emerald-400 p-1.5 sm:p-2 rounded-full transition-transform active:scale-95"
                     >
-                      <Send className="w-4 h-4" />
+                      <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="flex-1 bg-black border border-red-800 text-red-400 px-3 py-2 flex items-center justify-between rounded-sm min-w-0 animate-luxury-glow">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <div className="flex-1 bg-black border border-red-800 text-red-400 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center justify-between rounded-sm min-w-0 animate-luxury-glow">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                    <span className="relative flex h-2 w-2 shrink-0">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
                     </span>
-                    <span className="text-xs sm:text-sm font-mono tracking-widest font-extrabold text-red-500">
-                      GRAVANDO
+                    <span className="text-[10px] sm:text-xs font-mono tracking-widest font-extrabold text-red-500">
+                      REC
                     </span>
-                    {/* Bouncing Audio Wave columns */}
-                    <div className="flex items-end gap-[3px] h-3 ml-1 shrink-0">
-                      {[0.1, 0.4, 0.2, 0.6, 0.3, 0.5, 0.2, 0.4].map((delay, index) => (
+                    <div className="flex items-end gap-[1.5px] h-2.5 ml-0.5 shrink-0">
+                      {[0.1, 0.4, 0.2, 0.6].map((delay, index) => (
                         <span
                           key={index}
-                          className="w-[2px] bg-red-500 rounded-full"
+                          className="w-[1px] sm:w-[2px] bg-red-500 rounded-full"
                           style={{
                             height: '100%',
                             animation: `bouncing-bar ${0.7 + delay}s ease-in-out infinite alternate`,
@@ -5923,26 +6011,23 @@ export default function App() {
                     <button
                       type="button"
                       onClick={isRecordingPaused ? resumeRecording : pauseRecording}
-                      className="text-amber-500 hover:text-amber-300 p-1.5 bg-amber-950/30 rounded-full border border-amber-900/50"
-                      title={isRecordingPaused ? "Retomar" : "Pausar"}
+                      className="text-amber-500 p-1.5 bg-amber-950/30 rounded-full border border-amber-900/50"
                     >
-                      {isRecordingPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                      {isRecordingPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
                     </button>
                     <button 
                       type="button"
                       onClick={stopAndPreviewRecording}
-                      className="text-emerald-500 hover:text-emerald-300 p-1.5 bg-emerald-950/30 rounded-full border border-emerald-900/50"
-                      title="Parar e ouvir"
+                      className="text-emerald-500 p-1.5 bg-emerald-950/30 rounded-full border border-emerald-900/50"
                     >
-                      <Check className="w-3.5 h-3.5" />
+                      <Check className="w-3 h-3" />
                     </button>
                     <button 
                       type="button"
                       onClick={cancelRecording}
-                      className="text-red-500 hover:text-red-300 p-1.5 bg-red-950/30 rounded-full border border-red-900/50"
-                      title="Cancelar gravação"
+                      className="text-red-500 p-1.5 bg-red-950/30 rounded-full border border-red-900/50"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -5950,7 +6035,7 @@ export default function App() {
             ) : (
               <textarea
                 ref={textareaRef}
-                rows={3}
+                rows={2}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 maxLength={5000}
@@ -5964,8 +6049,8 @@ export default function App() {
                     }
                   }
                 }}
-                placeholder="Transmitir mensagem..."
-                className="flex-1 bg-zinc-900/90 border border-emerald-800/80 text-emerald-100 px-4 py-3 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all text-sm resize-y min-h-[90px] max-h-60 scrollbar-thin scrollbar-thumb-emerald-900 rounded-lg shadow-inner"
+                placeholder="Transmitir..."
+                className="flex-1 bg-zinc-900/90 border border-emerald-800/80 text-emerald-100 px-3 py-2 sm:px-4 sm:py-3 focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400/30 transition-all text-sm resize-y min-h-[50px] sm:min-h-[90px] max-h-40 sm:max-h-60 scrollbar-thin scrollbar-thumb-emerald-900 rounded-lg shadow-inner"
               />
             )}
 
