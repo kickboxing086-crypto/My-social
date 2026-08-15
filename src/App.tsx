@@ -307,6 +307,15 @@ export default function App() {
   const [deleteGroupConfirmationText, setDeleteGroupConfirmationText] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
+  const [currentPinnedIndex, setCurrentPinnedIndex] = useState(0);
+  const [confirmModalState, setConfirmModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    isDestructive?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
   const [showGroupsMenu, setShowGroupsMenu] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showJoinGroupModal, setShowJoinGroupModal] = useState(false);
@@ -1100,7 +1109,7 @@ export default function App() {
 
   const handleDeleteGroup = async () => {
     if (!deleteGroupTarget) return;
-    if (deleteGroupConfirmationText.toLowerCase() !== 'apagar') {
+    if (deleteGroupConfirmationText.trim().toLowerCase() !== 'apagar') {
       showAlert('A palavra de confirmação está incorreta.', 'FALHA NA CONFIRMAÇÃO', 'error');
       return;
     }
@@ -1470,9 +1479,27 @@ export default function App() {
   };
 
   const handleResetGroupInviteCode = async (targetGroupId: string) => {
-    if (!confirm("Tem certeza que deseja redefinir o link de convite deste grupo? O link de convite anterior deixará de funcionar imediatamente, impedindo que novas pessoas o usem para entrar.")) {
-      return;
-    }
+    return setConfirmModalState({
+      isOpen: true,
+      title: 'REDEFINIR LINK',
+      message: 'Tem certeza que deseja redefinir o link de convite deste grupo? O link anterior deixará de funcionar imediatamente.',
+      isDestructive: true,
+      confirmText: 'REDEFINIR',
+      onConfirm: async () => {
+        const newInviteCode = generateInviteCode();
+        try {
+          await updateDoc(doc(db, 'groups', targetGroupId), { inviteCode: newInviteCode });
+          setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, inviteCode: newInviteCode } : g));
+          if (groupSettingsTarget && groupSettingsTarget.id === targetGroupId) {
+            setGroupSettingsTarget({ ...groupSettingsTarget, inviteCode: newInviteCode });
+          }
+          showAlert('Link de convite redefinido com sucesso! O convite anterior foi desativado.', 'CONVITE ATUALIZADO', 'success');
+        } catch (err) {
+          console.error(err);
+          showAlert('Erro ao redefinir link de convite.', 'ERRO', 'error');
+        }
+      }
+    });
 
     const newInviteCode = generateInviteCode();
     try {
@@ -2830,6 +2857,65 @@ export default function App() {
     );
   };
 
+  const renderGenericConfirmModal = () => {
+    if (!confirmModalState?.isOpen) return null;
+
+    return (
+      <AnimatePresence>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-[99] backdrop-blur-md">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className={`bg-black border ${confirmModalState.isDestructive ? 'border-red-900' : 'border-emerald-900'} shadow-2xl rounded-sm max-w-sm w-full overflow-hidden flex flex-col`}
+          >
+            <div className={`p-3 border-b flex justify-between items-center ${confirmModalState.isDestructive ? 'border-red-900/50 bg-red-950/20' : 'border-emerald-900/50 bg-emerald-950/20'}`}>
+              <div className="flex items-center gap-2">
+                {confirmModalState.isDestructive ? (
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                ) : (
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                )}
+                <h3 className="text-white font-bold text-sm tracking-widest uppercase">{confirmModalState.title}</h3>
+              </div>
+              <button onClick={() => setConfirmModalState(null)} className="text-zinc-500 hover:text-zinc-300 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div className="text-zinc-300 text-sm">
+                {confirmModalState.message}
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setConfirmModalState(null)}
+                  className={`px-4 py-2 text-xs font-bold ${confirmModalState.isDestructive ? 'text-red-400 hover:text-red-300' : 'text-emerald-400 hover:text-emerald-300'}`}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={() => {
+                    confirmModalState.onConfirm();
+                    setConfirmModalState(null);
+                  }}
+                  className={`px-4 py-2 text-white text-xs font-bold rounded-sm transition-colors uppercase tracking-wider ${
+                    confirmModalState.isDestructive 
+                      ? 'bg-red-900 hover:bg-red-800 shadow-[0_0_15px_rgba(239,68,68,0.2)]' 
+                      : 'bg-emerald-700 hover:bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                  }`}
+                >
+                  {confirmModalState.confirmText || 'CONFIRMAR'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </AnimatePresence>
+    );
+  };
+
   const renderDeleteGroupModal = () => {
     if (!deleteGroupTarget) return null;
 
@@ -2879,7 +2965,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={handleDeleteGroup}
-                  disabled={deleteGroupConfirmationText.toLowerCase() !== 'apagar'}
+                  disabled={deleteGroupConfirmationText.trim().toLowerCase() !== 'apagar'}
                   className="px-4 py-2 bg-red-900 hover:bg-red-800 disabled:bg-red-950 disabled:text-red-900 disabled:cursor-not-allowed text-white text-xs font-bold rounded-sm transition-colors uppercase tracking-wider shadow-[0_0_15px_rgba(239,68,68,0.2)] disabled:shadow-none"
                 >
                   APAGAR AGORA
@@ -3620,12 +3706,19 @@ export default function App() {
                                   <button
                                     onClick={async () => {
                                       setOpenGroupMemberMenuUser(null);
-                                      if (confirm(`Remover @${memberUser} do grupo?`)) {
-                                        const newMembers = groupSettingsTarget.members.filter(m => m !== memberUser);
-                                        const newOwners = groupSettingsTarget.owners.filter(o => o !== memberUser);
-                                        await updateDoc(doc(db, 'groups', groupSettingsTarget.id), { members: newMembers, owners: newOwners });
-                                        setGroupSettingsTarget({ ...groupSettingsTarget, members: newMembers, owners: newOwners });
-                                      }
+                                      setConfirmModalState({
+    isOpen: true,
+    title: 'REMOVER MEMBRO',
+    message: `Remover @${memberUser} do grupo?`,
+    isDestructive: true,
+    confirmText: 'REMOVER',
+    onConfirm: async () => {
+      const newMembers = groupSettingsTarget.members.filter(m => m !== memberUser);
+      const newOwners = groupSettingsTarget.owners.filter(o => o !== memberUser);
+      await updateDoc(doc(db, 'groups', groupSettingsTarget.id), { members: newMembers, owners: newOwners });
+      setGroupSettingsTarget({ ...groupSettingsTarget, members: newMembers, owners: newOwners });
+    }
+  });
                                     }}
                                     className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/60 text-red-300 flex items-center gap-2 font-bold"
                                   >
@@ -3672,14 +3765,21 @@ export default function App() {
 
                 <button
                   onClick={async () => {
-                    if (confirm('Tem certeza que deseja sair do grupo?')) {
-                      const newMembers = groupSettingsTarget.members.filter(m => m !== currentUser?.username);
-                      await updateDoc(doc(db, 'groups', groupSettingsTarget.id), { members: newMembers });
-                      setGroupSettingsTarget(null);
-                      setCurrentGroupId(null);
-                      setShowGroupsMenu(false);
-                      showAlert('Você saiu do grupo.', 'SUCESSO', 'info');
-                    }
+                    setConfirmModalState({
+    isOpen: true,
+    title: 'SAIR DO GRUPO',
+    message: 'Tem certeza que deseja sair deste grupo?',
+    isDestructive: true,
+    confirmText: 'SAIR DO GRUPO',
+    onConfirm: async () => {
+      const newMembers = groupSettingsTarget.members.filter(m => m !== currentUser?.username);
+      await updateDoc(doc(db, 'groups', groupSettingsTarget.id), { members: newMembers });
+      setGroupSettingsTarget(null);
+      setCurrentGroupId(null);
+      setShowGroupsMenu(false);
+      showAlert('Você saiu do grupo.', 'SUCESSO', 'info');
+    }
+  });
                   }}
                   className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 p-2.5 text-xs font-bold rounded transition-colors uppercase tracking-wider"
                 >
@@ -5420,6 +5520,31 @@ export default function App() {
             )}
           </div>
 
+          {/* Central Analytics Banner (Hidden on small mobile) */}
+          <div className="hidden lg:flex items-center justify-center flex-1 mx-4">
+            <div className="flex items-center bg-black/60 border border-emerald-900/40 rounded shadow-inner py-1 px-3 gap-6">
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] text-emerald-600/80 font-bold uppercase tracking-widest">Tráfego</span>
+                <span className="text-emerald-400 font-mono text-[10px] font-bold">{filteredMessages.length} msgs</span>
+              </div>
+              <div className="h-5 w-px bg-emerald-900/40"></div>
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] text-emerald-600/80 font-bold uppercase tracking-widest">Atividade</span>
+                <div className="w-12 h-1.5 bg-emerald-950/50 rounded-full overflow-hidden mt-0.5">
+                  <div className="h-full bg-emerald-500/50 w-[82%] shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
+                </div>
+              </div>
+              <div className="h-5 w-px bg-emerald-900/40"></div>
+              <div className="flex flex-col items-center">
+                <span className="text-[8px] text-emerald-600/80 font-bold uppercase tracking-widest">Status</span>
+                <span className="text-emerald-400 font-mono text-[10px] flex items-center gap-1 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  ONLINE
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Right Controls & Administrative 3-Dots Menu */}
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Search */}
@@ -5606,16 +5731,23 @@ export default function App() {
                       <button
                         onClick={() => {
                           setShowHeaderAdminMenu(false);
-                          if (confirm('Tem certeza que deseja sair deste grupo?')) {
-                          const currentGrp = groups.find(g => g.id === currentGroupId);
-                          if (currentGrp) {
-                            const newMembers = currentGrp.members.filter(m => m !== currentUser?.username);
-                            const newOwners = currentGrp.owners.filter(o => o !== currentUser?.username);
-                            updateDoc(doc(db, 'groups', currentGrp.id), { members: newMembers, owners: newOwners });
-                            setCurrentGroupId(null);
-                            showAlert('Você saiu do grupo.', 'SAÍDA DE GRUPO', 'info');
-                          }
-                        }
+                          setConfirmModalState({
+    isOpen: true,
+    title: 'SAIR DO GRUPO',
+    message: 'Tem certeza que deseja sair deste grupo?',
+    isDestructive: true,
+    confirmText: 'SAIR DO GRUPO',
+    onConfirm: async () => {
+      const currentGrp = groups.find(g => g.id === currentGroupId);
+      if (currentGrp) {
+        const newMembers = currentGrp.members.filter(m => m !== currentUser?.username);
+        const newOwners = currentGrp.owners.filter(o => o !== currentUser?.username);
+        await updateDoc(doc(db, 'groups', currentGrp.id), { members: newMembers, owners: newOwners });
+        setCurrentGroupId(null);
+        showAlert('Você saiu do grupo.', 'SAÍDA DE GRUPO', 'info');
+      }
+    }
+  });
                         }}
                         className="w-full text-left px-2.5 py-2 rounded hover:bg-amber-950/60 text-amber-400 transition-colors flex items-center gap-2 font-bold border-t border-emerald-900/40 mt-1"
                       >
@@ -5665,33 +5797,61 @@ export default function App() {
         </header>
 
         {/* Pinned Messages Banner */}
-        {filteredMessages.filter(m => m.isPinned && !m.isDeleted).length > 0 && (
-          <div className="bg-emerald-950/40 border-b border-emerald-900/50 p-2 sm:p-3 shrink-0 flex flex-col gap-2 z-20 relative shadow-md">
-            <div className="flex items-center gap-1.5 text-emerald-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">
-              <Pin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Mensagens Fixadas ({filteredMessages.filter(m => m.isPinned && !m.isDeleted).length})
-            </div>
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-emerald-900">
-              {filteredMessages.filter(m => m.isPinned && !m.isDeleted).map(msg => (
-                <div key={`pin-${msg.id}`} className="bg-black/60 border border-emerald-900/40 p-2 rounded-sm min-w-[200px] max-w-[300px] flex-shrink-0 flex flex-col gap-1.5 cursor-pointer hover:bg-emerald-950/20 transition-colors" onClick={() => {
-                  const el = document.getElementById(`msg-${msg.id}`); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('bg-emerald-900/40'); setTimeout(() => el.classList.remove('bg-emerald-900/40'), 2000); }
-                }}>
+        {(() => {
+          const pinnedMsgs = filteredMessages.filter(m => m.isPinned && !m.isDeleted);
+          if (pinnedMsgs.length === 0) return null;
+          const safeIndex = currentPinnedIndex % pinnedMsgs.length;
+          const msg = pinnedMsgs[safeIndex];
+
+          return (
+            <div 
+              className="bg-black/90 border-b border-emerald-900/50 p-2 shrink-0 flex items-center justify-between z-20 relative shadow-md cursor-pointer hover:bg-black transition-colors"
+              onClick={() => {
+                const el = document.getElementById(`msg-${msg.id}`); 
+                if (el) { 
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+                  el.classList.add('bg-emerald-900/40'); 
+                  setTimeout(() => el.classList.remove('bg-emerald-900/40'), 2000); 
+                }
+                setCurrentPinnedIndex((prev) => (prev + 1) % pinnedMsgs.length);
+              }}
+            >
+              <div className="flex items-center gap-3 w-full min-w-0">
+                <div className="flex flex-col gap-1 justify-center pl-1">
+                  {pinnedMsgs.map((_, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`w-[3px] h-[3px] sm:h-[4px] rounded-full transition-colors ${idx === safeIndex ? 'bg-emerald-400' : 'bg-emerald-900/50'}`}
+                    />
+                  ))}
+                </div>
+                <div className="flex flex-col min-w-0 flex-1 border-l-2 border-emerald-600/50 pl-2">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-emerald-500 font-bold text-xs truncate">@{msg.sender}</span>
+                    <span className="text-emerald-500 font-bold text-[11px] uppercase tracking-wider truncate flex items-center gap-1.5">
+                      <Pin className="w-3 h-3" />
+                      Mensagem Fixada
+                    </span>
                     {isAdmin && (
-                      <button onClick={(e) => { e.stopPropagation(); handleTogglePinMessage(msg.id, true); }} className="text-zinc-500 hover:text-red-400 p-0.5">
-                        <PinOff className="w-3 h-3" />
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          handleTogglePinMessage(msg.id, true); 
+                          setCurrentPinnedIndex(0);
+                        }} 
+                        className="text-zinc-500 hover:text-red-400 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>
-                  <span className="text-emerald-100 text-xs line-clamp-2 leading-relaxed">
+                  <span className="text-zinc-300 text-xs truncate">
                     {msg.text || (msg.attachment ? '[Anexo]' : '')}
                   </span>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-20 scrollbar-thin scrollbar-thumb-emerald-900 scrollbar-track-transparent">
           {filteredMessages.filter(m => m.type !== 'system').map((msg) => (
@@ -6377,6 +6537,7 @@ export default function App() {
       {renderAppealReplyModal()}
       {renderBanReasonModal()}
       {renderItemDeleteConfirmModal()}
+      {renderGenericConfirmModal()}
       {renderDeleteGroupModal()}
       {renderGroupTopicsModal()}
       {renderLightboxModal()}
