@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React from "react";
-import { Globe, Briefcase, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
+import { Globe, Briefcase, Lock, Unlock, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
@@ -34,6 +34,7 @@ type Group = {
   owners: string[];
   members: string[];
   topics?: string[];
+  closedTopics?: string[];
   nameEditCount?: number;
   createdAt: any;
 };
@@ -1414,6 +1415,32 @@ export default function App() {
     }
   };
 
+    const handleToggleTopicStatus = async (targetGroupId: string, topicName: string) => {
+    const groupObj = groups.find(g => g.id === targetGroupId);
+    if (!groupObj) return;
+    
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) return;
+    
+    const closedTopics = groupObj.closedTopics || [];
+    const isClosed = closedTopics.includes(topicName);
+    
+    const newClosedTopics = isClosed 
+      ? closedTopics.filter(t => t !== topicName)
+      : [...closedTopics, topicName];
+      
+    try {
+      await updateDoc(doc(db, 'groups', targetGroupId), { closedTopics: newClosedTopics });
+      setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, closedTopics: newClosedTopics } : g));
+      if (groupSettingsTarget && groupSettingsTarget.id === targetGroupId) {
+        setGroupSettingsTarget({ ...groupSettingsTarget, closedTopics: newClosedTopics });
+      }
+    } catch (err) {
+      console.error('Error toggling topic status:', err);
+      showAlert('Erro ao alterar status do tópico.', 'ERRO', 'error');
+    }
+  };
+
   const handleEditTopicInGroup = async (targetGroupId: string, oldTopicName: string, newTopicName: string) => {
     if (oldTopicName.toLowerCase() === 'geral') {
       showAlert('O tópico #Geral é o tópico principal e não pode ser editado.', 'AÇÃO NEGADA', 'warning');
@@ -1463,13 +1490,10 @@ export default function App() {
       // 3. Update existing messages in that group & old topic
       const qMsgs = query(collection(db, 'messages'), where('groupId', '==', targetGroupId), where('topic', '==', oldTopicName));
       const snapshot = await getDocs(qMsgs);
-      snapshot.forEach(async (msgDoc) => {
-        try {
-          await updateDoc(doc(db, 'messages', msgDoc.id), { topic: cleanTopic });
-        } catch (msgErr) {
-          console.error("Error updating message topic:", msgErr);
-        }
-      });
+      const updatePromises = snapshot.docs.map(msgDoc => 
+        updateDoc(doc(db, 'messages', msgDoc.id), { topic: cleanTopic })
+      );
+      await Promise.all(updatePromises);
 
       showAlert(`Tópico #${oldTopicName} renomeado para #${cleanTopic} com sucesso!`, 'SUCESSO', 'success');
     } catch (err) {
@@ -2000,7 +2024,7 @@ export default function App() {
     );
   };
 
-  const handleAdminActionById = async (actionType: 'ban' | 'unban' | 'makeAdmin' | 'makeGeneralAdmin' | 'removeAdmin', targetId: string) => {
+  const handleAdminActionById = async (actionType: 'ban' | 'unban' | 'makeAdmin' | 'makeGeneralAdmin' | 'removeAdmin' | 'deleteAccount', targetId: string) => {
     if (!isAdmin || !targetId.trim()) {
       if (!targetId.trim()) {
         showAlert('Por favor, informe o ID ou nome de usuário.', 'CAMPO VAZIO', 'warning');
@@ -3014,6 +3038,7 @@ export default function App() {
               <div className="space-y-1.5 max-h-60 overflow-y-auto mb-5 pr-1 scrollbar-thin scrollbar-thumb-emerald-900">
                 {topicsList.map(tName => {
                   const isSelected = (currentTopic || 'Geral') === tName;
+                  const isClosed = (group.closedTopics || []).includes(tName);
                   return (
                     <button
                       key={tName}
@@ -3030,6 +3055,7 @@ export default function App() {
                       <span className="flex items-center gap-2">
                         <Hash className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400 animate-pulse' : 'text-emerald-600'}`} />
                         #{tName}
+                        {isClosed && <Lock className="w-3 h-3 text-red-400/80 ml-1" title="Tópico Fechado" />}
                       </span>
                       {isSelected && (
                         <span className="text-[10px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black uppercase tracking-wider scale-90">
@@ -3596,7 +3622,7 @@ export default function App() {
                           </div>
                         ) : (
                           <>
-                            <span>#{t}</span>
+                            <span className="flex items-center gap-1">#{t} {(groupSettingsTarget.closedTopics || []).includes(t) && <Lock className="w-2.5 h-2.5 text-red-500/80" title="Tópico Fechado" />}</span>
                             {t.toLowerCase() !== 'geral' && (groupSettingsTarget.owners.includes(currentUser?.username || '') || isAdmin) && (
                               <div className="flex items-center gap-1">
                                 <button
@@ -3608,6 +3634,13 @@ export default function App() {
                                   title="Editar tópico"
                                 >
                                   <Edit2 className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => handleToggleTopicStatus(groupSettingsTarget.id, t)}
+                                  className={`p-0.5 ${(groupSettingsTarget.closedTopics || []).includes(t) ? 'text-red-400 hover:text-emerald-400' : 'text-emerald-600 hover:text-red-400'}`}
+                                  title={(groupSettingsTarget.closedTopics || []).includes(t) ? 'Abrir tópico' : 'Fechar tópico (Somente admins)'}
+                                >
+                                  {(groupSettingsTarget.closedTopics || []).includes(t) ? <Unlock className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                 </button>
                                 <button
                                   onClick={() => handleRemoveTopicFromGroup(groupSettingsTarget.id, t)}
@@ -6365,7 +6398,24 @@ export default function App() {
               </button>
             </div>
           )}
-          <form onSubmit={handleSendMessage} className="flex items-end gap-1 sm:gap-2 relative">
+          {(() => {
+          const currentGroupObj = groups.find(g => g.id === currentGroupId);
+          const isClosed = currentGroupObj?.closedTopics?.includes(currentTopic || 'Geral');
+          const isGrpAdmin = currentGroupObj?.owners.includes(currentUser?.username || '') || isAdmin;
+          
+          if (isClosed && !isGrpAdmin) {
+            return (
+              <div className="flex justify-center items-center py-4 bg-black/40 border border-red-900/30 rounded-sm">
+                <div className="flex items-center gap-2 text-red-400 font-bold text-xs uppercase tracking-widest">
+                  <Lock className="w-4 h-4" />
+                  <span>Tópico fechado para novas mensagens</span>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <form onSubmit={handleSendMessage} className="flex items-end gap-1 sm:gap-2 relative">
             {/* View Once Toggle */}
             <button
               type="button"
@@ -6517,6 +6567,8 @@ export default function App() {
               <Send className="w-4 h-4" />
             </button>
           </form>
+          );
+        })()}
         </div>
 
       </div>
