@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React from "react";
-import { Globe, Briefcase, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target } from 'lucide-react';
+import { Globe, Briefcase, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
@@ -55,6 +55,11 @@ type Message = {
   isEdited?: boolean;
   editCount?: number;
   deletedAt?: any;
+  replyTo?: {
+    id: string;
+    sender: string;
+    text: string;
+  };
 };
 
 type Report = {
@@ -297,6 +302,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<DevUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+  const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null);
+  const [deleteGroupConfirmationText, setDeleteGroupConfirmationText] = useState('');
   const [groups, setGroups] = useState<Group[]>([]);
   const [currentGroupId, setCurrentGroupId] = useState<string | null>(null);
   const [showGroupsMenu, setShowGroupsMenu] = useState(false);
@@ -1090,10 +1098,13 @@ export default function App() {
 
   
 
-  const handleDeleteGroup = async (groupToDelete: Group) => {
-    if (!confirm(`ATENÇÃO: Deseja realmente APAGAR permanentemente o grupo "${groupToDelete.name}"? Esta ação é irreversível e excluirá todas as mensagens e dados do grupo.`)) {
+  const handleDeleteGroup = async () => {
+    if (!deleteGroupTarget) return;
+    if (deleteGroupConfirmationText.toLowerCase() !== 'apagar') {
+      showAlert('A palavra de confirmação está incorreta.', 'FALHA NA CONFIRMAÇÃO', 'error');
       return;
     }
+    const groupToDelete = deleteGroupTarget;
     try {
       await deleteDoc(doc(db, 'groups', groupToDelete.id));
 
@@ -1106,6 +1117,8 @@ export default function App() {
       setCurrentGroupId(null);
       setCurrentTopic('Geral');
       setShowGroupsMenu(false);
+      setDeleteGroupTarget(null);
+      setDeleteGroupConfirmationText('');
       showAlert(`Grupo "${groupToDelete.name}" apagado com sucesso!`, 'GRUPO EXCLUÍDO', 'success');
     } catch (err) {
       console.error(err);
@@ -1680,6 +1693,14 @@ export default function App() {
         messageData.text = textToSend;
       }
 
+      if (replyingToMessage) {
+        messageData.replyTo = {
+          id: replyingToMessage.id,
+          sender: replyingToMessage.sender,
+          text: replyingToMessage.text || (replyingToMessage.attachment ? 'Arquivo anexado' : '')
+        };
+      }
+
       await addDoc(collection(db, 'messages'), messageData);
 
       if (stagedAttachment && stagedAttachment.fileType === 'image') {
@@ -1692,6 +1713,7 @@ export default function App() {
 
       setInputValue('');
       setStagedAttachment(null);
+      setReplyingToMessage(null);
       setIsViewOnce(false);
       if (textareaRef.current) textareaRef.current.style.height = '40px';
     } catch (err: any) {
@@ -2808,6 +2830,68 @@ export default function App() {
     );
   };
 
+  const renderDeleteGroupModal = () => {
+    if (!deleteGroupTarget) return null;
+
+    return (
+      <AnimatePresence>
+        <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-[99] backdrop-blur-md">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-black border border-red-900 shadow-2xl rounded-sm max-w-sm w-full overflow-hidden flex flex-col"
+          >
+            <div className="p-3 border-b border-red-900/50 flex justify-between items-center bg-red-950/20">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                <h3 className="text-white font-bold text-sm tracking-widest uppercase">APAGAR GRUPO</h3>
+              </div>
+              <button onClick={() => setDeleteGroupTarget(null)} className="text-red-500 hover:text-red-400 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="p-4 space-y-4">
+              <div className="text-red-200 text-sm">
+                Esta ação é <strong className="text-red-400">IRREVERSÍVEL</strong>. O grupo "<strong className="text-white">{deleteGroupTarget.name}</strong>" e todas as suas mensagens serão permanentemente excluídos.
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-red-400 uppercase tracking-wider block">
+                  Para confirmar, digite "apagar":
+                </label>
+                <input
+                  type="text"
+                  value={deleteGroupConfirmationText}
+                  onChange={(e) => setDeleteGroupConfirmationText(e.target.value)}
+                  placeholder="apagar"
+                  className="w-full bg-red-950/30 border border-red-900/50 text-red-200 px-3 py-2 text-sm focus:outline-none focus:border-red-500 transition-colors font-mono uppercase placeholder-red-900/50"
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setDeleteGroupTarget(null)}
+                  className="px-4 py-2 text-xs font-bold text-red-400 hover:text-red-300"
+                >
+                  CANCELAR
+                </button>
+                <button
+                  onClick={handleDeleteGroup}
+                  disabled={deleteGroupConfirmationText.toLowerCase() !== 'apagar'}
+                  className="px-4 py-2 bg-red-900 hover:bg-red-800 disabled:bg-red-950 disabled:text-red-900 disabled:cursor-not-allowed text-white text-xs font-bold rounded-sm transition-colors uppercase tracking-wider shadow-[0_0_15px_rgba(239,68,68,0.2)] disabled:shadow-none"
+                >
+                  APAGAR AGORA
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </AnimatePresence>
+    );
+  };
+
   const renderGroupTopicsModal = () => {
     const group = groups.find(g => g.id === currentGroupId);
     if (!group || !showGroupTopicsModal) return null;
@@ -3575,7 +3659,10 @@ export default function App() {
               <div className="pt-4 border-t border-emerald-900/40 shrink-0 mt-4 space-y-2">
                 {(groupSettingsTarget.owners.includes(currentUser?.username || '') || isAdmin) && (
                   <button
-                    onClick={() => handleDeleteGroup(groupSettingsTarget)}
+                    onClick={() => {
+                      setDeleteGroupConfirmationText('');
+                      setDeleteGroupTarget(groupSettingsTarget);
+                    }}
                     className="w-full bg-red-950/90 border border-red-700/80 text-red-200 hover:bg-red-900 p-2.5 text-xs font-bold rounded transition-colors uppercase tracking-wider flex items-center justify-center gap-2"
                   >
                     <Trash2 className="w-4 h-4 text-red-400" />
@@ -5688,6 +5775,21 @@ export default function App() {
                     {/* Popover Dropdown Menu */}
                     {openMessageMenuId === msg.id && (
                       <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-950 border border-emerald-800 rounded shadow-2xl p-1 z-50 space-y-1 font-mono text-xs">
+                        {/* Reply option */}
+                        <button
+                          onClick={() => {
+                            setOpenMessageMenuId(null);
+                            setReplyingToMessage(msg);
+                            if (textareaRef.current) {
+                              textareaRef.current.focus();
+                            }
+                          }}
+                          className="w-full text-left px-2.5 py-1.5 rounded hover:bg-emerald-950/60 text-emerald-300 flex items-center gap-2 font-bold"
+                        >
+                          <Reply className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Responder</span>
+                        </button>
+
                         {/* Edit Message option */}
                         {msg.sender === currentUser?.username && !msg.viewOnce && (
                           <button
@@ -5794,6 +5896,19 @@ export default function App() {
                       {msg.sender}
                     </span>
                   </div>
+
+                  {msg.replyTo && (
+                    <div 
+                      className="mb-2 bg-zinc-950/50 border-l-4 border-emerald-600 p-2 rounded-r-sm text-xs opacity-90 flex flex-col gap-0.5 cursor-pointer hover:bg-zinc-900/80 transition-colors"
+                      onClick={() => document.getElementById(`msg-${msg.replyTo!.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    >
+                      <div className="flex items-center gap-1.5 text-emerald-500 font-bold">
+                        <Reply className="w-3 h-3 scale-x-[-1]" />
+                        <span>@{msg.replyTo.sender}</span>
+                      </div>
+                      <span className="text-zinc-400 truncate">{msg.replyTo.text}</span>
+                    </div>
+                  )}
                   
                   {msg.viewOnce ? (
                     isAdmin ? (
@@ -6056,6 +6171,22 @@ export default function App() {
             </span>
           </div>
           
+          {replyingToMessage && !editingMessageId && (
+            <div className="bg-zinc-900/90 border-l-4 border-emerald-500 border-y border-r border-y-zinc-800 border-r-zinc-800 p-2 px-3 rounded-t-sm flex items-start justify-between text-xs text-zinc-300 mb-1 animate-in slide-in-from-bottom-2 duration-200">
+              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span className="font-bold text-emerald-400">Responder para @{replyingToMessage.sender}</span>
+                <span className="truncate text-[10px] opacity-80">{replyingToMessage.text || (replyingToMessage.attachment ? 'Anexo' : '')}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReplyingToMessage(null)}
+                className="text-zinc-400 hover:text-white p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {editingMessageId && (
             <div className="bg-emerald-950/90 border border-emerald-800/90 p-2 px-3 rounded-t-sm flex items-center justify-between text-xs text-emerald-200 mb-1 animate-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center gap-2">
@@ -6246,6 +6377,7 @@ export default function App() {
       {renderAppealReplyModal()}
       {renderBanReasonModal()}
       {renderItemDeleteConfirmModal()}
+      {renderDeleteGroupModal()}
       {renderGroupTopicsModal()}
       {renderLightboxModal()}
     </div>
