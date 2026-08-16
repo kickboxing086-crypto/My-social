@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React from "react";
-import { Globe, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
+import { Globe, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft, Settings } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
@@ -47,6 +47,8 @@ type Group = {
   members: string[];
   topics?: string[];
   closedTopics?: string[];
+  privateTopics?: string[];
+  isPrivate?: boolean;
   nameEditCount?: number;
   createdAt: any;
 };
@@ -342,6 +344,16 @@ export default function App() {
   const [showGroupTopicsModal, setShowGroupTopicsModal] = useState<boolean>(false);
   const [showAddTopicModal, setShowAddTopicModal] = useState<boolean>(false);
   const [newTopicName, setNewTopicName] = useState<string>('');
+  const [newTopicIsPrivate, setNewTopicIsPrivate] = useState<boolean>(false);
+  const [emailTemplateModalUser, setEmailTemplateModalUser] = useState<{
+    name: string;
+    username: string;
+    password?: string;
+    role?: string;
+    email?: string;
+    contact?: string;
+  } | null>(null);
+  const [copiedEmailSuccess, setCopiedEmailSuccess] = useState<boolean>(false);
   const [editGroupNameInput, setEditGroupNameInput] = useState<string>('');
   const [editingTopicName, setEditingTopicName] = useState<string | null>(null);
   const [editTopicValue, setEditTopicValue] = useState<string>('');
@@ -471,11 +483,14 @@ export default function App() {
 
 
 
-  const onlineUsersCount = allMembers.filter(m => {
-    if (!m.lastActive) return false;
-    const lastActiveTime = m.lastActive.toDate ? m.lastActive.toDate().getTime() : new Date(m.lastActive).getTime();
-    return (Date.now() - lastActiveTime) < 300000; // 5 minutes
-  }).length;
+  const onlineUsersCount = useMemo(() => {
+    return allMembers.filter(m => {
+      if (!m.lastActive) return false;
+      const lastActiveTime = m.lastActive?.toDate ? m.lastActive.toDate().getTime() : (typeof m.lastActive === 'number' ? m.lastActive : new Date(m.lastActive).getTime());
+      if (isNaN(lastActiveTime)) return false;
+      return (nowTick - lastActiveTime) < 180000; // Ativo nos últimos 3 minutos
+    }).length;
+  }, [allMembers, nowTick]);
 
   const isGeneralAdmin = !!(
     currentUser?.role?.toLowerCase() === 'administrador geral' ||
@@ -721,33 +736,50 @@ export default function App() {
       return () => { unsubscribeMessages(); unsubscribeGroups(); };
     }
   }, [view, currentUser]);
-    // Timer tick for real-time online calculations
+    // Timer tick for real-time online calculations (4s for accurate sync)
   useEffect(() => {
-    const timer = setInterval(() => setNowTick(Date.now()), 10000);
+    const timer = setInterval(() => setNowTick(Date.now()), 4000);
     return () => clearInterval(timer);
   }, []);
 
-  // Real-time active presence heartbeat
+  // Real-time active presence heartbeat & live activity sync
   useEffect(() => {
     if (!currentUser || currentUser.username === 'Ssilva_7') return;
     const userId = currentUser.uid || currentUser.id;
     if (!userId) return;
 
+    let lastSent = 0;
     const updateActive = async () => {
+      const now = Date.now();
+      if (now - lastSent < 5000) return; // avoid duplicate writes within 5s
+      lastSent = now;
       try {
         await updateDoc(doc(db, 'users', userId), { lastActive: serverTimestamp() });
       } catch (err) {}
     };
 
     updateActive();
-    const interval = setInterval(updateActive, 25000);
+    const interval = setInterval(updateActive, 15000);
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') updateActive();
     };
+    const handleFocus = () => updateActive();
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastSent >= 12000) updateActive();
+    };
+
     window.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
+    window.addEventListener('keydown', handleActivity, { passive: true });
+
     return () => {
       clearInterval(interval);
       window.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('pointerdown', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
     };
   }, [currentUser]);
 
@@ -1163,6 +1195,33 @@ export default function App() {
     await updateDoc(doc(db, 'messages', msg.id), { expired: true });
   };
 
+  const generateProfessionalEmailText = (user: { name: string; username: string; password?: string; role?: string; email?: string }) => {
+    const loginUrl = window.location.origin;
+    return `Assunto: Suas Credenciais de Acesso à Plataforma - My Social
+
+Prezado(a) ${user.name || user.username},
+
+Seja bem-vindo(a) à plataforma My Social!
+Seu acesso oficial foi configurado com sucesso e suas credenciais já estão disponíveis para utilização imediata.
+
+📌 DADOS DE ACESSO AO SISTEMA:
+• Nome Completo: ${user.name || 'Usuário'}
+• Nome de Usuário (Login): @${user.username}
+• Senha de Acesso: ${user.password || '******'}
+• Cargo / Nível de Acesso: ${user.role || 'Membro'}
+• Link Direto da Plataforma: ${loginUrl}
+
+🔐 RECOMENDAÇÕES IMPORTANTES DE SEGURANÇA:
+1. Este é um envio oficial e exclusivo de credenciais.
+2. Recomendamos guardar suas informações em local seguro e não compartilhá-las com terceiros.
+3. Você pode se conectar a qualquer momento acessando o link informado e inserindo seu usuário e senha.
+4. Caso necessite de alteração de dados, dúvidas ou suporte técnico, entre em contato com nossa equipe administrativa.
+
+Atenciosamente,
+Equipe de Administração & Segurança
+My Social • Sua Sociedade Digital`;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loginUsername === 'Ssilva_7' && loginPassword === '072131') {
@@ -1335,7 +1394,7 @@ export default function App() {
     }
   };
 
-  const handleAddTopicToGroup = async (targetGroupId: string, topicName: string) => {
+  const handleAddTopicToGroup = async (targetGroupId: string, topicName: string, isTopicPrivate: boolean = false) => {
     const cleanTopic = topicName.trim().replace(/^#+/, '');
     if (!cleanTopic) {
       showAlert('Por favor, digite o nome do tópico.', 'CAMPO OBRIGATÓRIO', 'warning');
@@ -1359,19 +1418,80 @@ export default function App() {
     }
 
     const newTopics = [...currentTopics, cleanTopic];
+    const currentPrivateTopics = groupObj.privateTopics || [];
+    const newPrivateTopics = isTopicPrivate
+      ? (currentPrivateTopics.includes(cleanTopic) ? currentPrivateTopics : [...currentPrivateTopics, cleanTopic])
+      : currentPrivateTopics.filter(t => t !== cleanTopic);
+
     try {
-      await updateDoc(doc(db, 'groups', targetGroupId), { topics: newTopics });
-      setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, topics: newTopics } : g));
+      await updateDoc(doc(db, 'groups', targetGroupId), { 
+        topics: newTopics,
+        privateTopics: newPrivateTopics
+      });
+      setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, topics: newTopics, privateTopics: newPrivateTopics } : g));
       if (groupSettingsTarget && groupSettingsTarget.id === targetGroupId) {
-        setGroupSettingsTarget({ ...groupSettingsTarget, topics: newTopics });
+        setGroupSettingsTarget({ ...groupSettingsTarget, topics: newTopics, privateTopics: newPrivateTopics });
       }
       setCurrentTopic(cleanTopic);
       setShowAddTopicModal(false);
+      setShowGroupTopicsModal(false);
       setNewTopicName('');
-      showAlert(`Tópico #${cleanTopic} criado com sucesso!`, 'SUCESSO', 'success');
+      setNewTopicIsPrivate(false);
+      showAlert(`Tópico #${cleanTopic} (${isTopicPrivate ? 'Privado 🔒' : 'Aberto 🌐'}) criado com sucesso!`, 'SUCESSO', 'success');
     } catch (err) {
       console.error(err);
       showAlert('Erro ao adicionar tópico.', 'ERRO', 'error');
+    }
+  };
+
+  const handleToggleTopicPrivacy = async (targetGroupId: string, topicName: string) => {
+    if (topicName.toLowerCase() === 'geral') {
+      showAlert('O tópico #Geral é o canal principal do grupo e deve permanecer Aberto.', 'AÇÃO NEGADA', 'warning');
+      return;
+    }
+    const groupObj = groups.find(g => g.id === targetGroupId);
+    if (!groupObj) return;
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) return;
+
+    const privateTopics = groupObj.privateTopics || [];
+    const isPrivate = privateTopics.includes(topicName);
+    const newPrivateTopics = isPrivate
+      ? privateTopics.filter(t => t !== topicName)
+      : [...privateTopics, topicName];
+
+    try {
+      await updateDoc(doc(db, 'groups', targetGroupId), { privateTopics: newPrivateTopics });
+      setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, privateTopics: newPrivateTopics } : g));
+      if (groupSettingsTarget && groupSettingsTarget.id === targetGroupId) {
+        setGroupSettingsTarget({ ...groupSettingsTarget, privateTopics: newPrivateTopics });
+      }
+      showAlert(`Tópico #${topicName} agora está ${!isPrivate ? 'Privado 🔒 (Apenas Admins)' : 'Aberto 🌐 (Todos os membros)'}!`, 'PRIVACIDADE DO TÓPICO', 'info');
+    } catch (err) {
+      console.error('Error toggling topic privacy:', err);
+      showAlert('Erro ao alterar privacidade do tópico.', 'ERRO', 'error');
+    }
+  };
+
+  const handleToggleGroupPrivacy = async (targetGroupId: string) => {
+    const groupObj = groups.find(g => g.id === targetGroupId);
+    if (!groupObj) return;
+    const isGrpAdmin = groupObj.owners.includes(currentUser?.username || '') || isGeneralAdmin;
+    if (!isGrpAdmin) return;
+
+    const currentPrivacy = !!groupObj.isPrivate;
+    const newPrivacy = !currentPrivacy;
+
+    try {
+      await updateDoc(doc(db, 'groups', targetGroupId), { isPrivate: newPrivacy });
+      setGroups(prev => prev.map(g => g.id === targetGroupId ? { ...g, isPrivate: newPrivacy } : g));
+      if (groupSettingsTarget && groupSettingsTarget.id === targetGroupId) {
+        setGroupSettingsTarget({ ...groupSettingsTarget, isPrivate: newPrivacy });
+      }
+      showAlert(`Grupo configurado como ${newPrivacy ? 'Privado 🔒' : 'Aberto 🌐'}!`, 'CONFIGURAÇÃO DO GRUPO', 'success');
+    } catch (err) {
+      console.error('Error toggling group privacy:', err);
+      showAlert('Erro ao alterar privacidade do grupo.', 'ERRO', 'error');
     }
   };
 
@@ -2881,7 +3001,7 @@ export default function App() {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleAddTopicToGroup(currentGroupId, newTopicName);
+                handleAddTopicToGroup(currentGroupId, newTopicName, newTopicIsPrivate);
               }}
               className="space-y-4"
             >
@@ -2894,23 +3014,64 @@ export default function App() {
                   required
                   value={newTopicName}
                   onChange={(e) => setNewTopicName(e.target.value)}
-                  placeholder="Ex: Avisos, Regras, Projetos..."
+                  placeholder="Ex: Avisos, Regras, Projetos, VIP..."
                   maxLength={25}
                   className="w-full bg-zinc-900/80 border border-emerald-900 text-emerald-200 px-3.5 py-2.5 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
                 />
               </div>
 
+              {/* Opção de Privacidade do Tópico */}
+              <div>
+                <label className="block text-emerald-500 text-xs font-bold uppercase tracking-wider mb-2 font-mono">
+                  Privacidade do Tópico
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewTopicIsPrivate(false)}
+                    className={`p-2.5 rounded border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                      !newTopicIsPrivate
+                        ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                        : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <Globe className="w-3.5 h-3.5 text-emerald-400" /> Aberto 🌐
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-normal">Todos os membros</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setNewTopicIsPrivate(true)}
+                    className={`p-2.5 rounded border text-xs font-bold flex flex-col items-center gap-1 transition-all ${
+                      newTopicIsPrivate
+                        ? 'bg-amber-950/90 border-amber-500 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                        : 'bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 font-bold">
+                      <Lock className="w-3.5 h-3.5 text-amber-400" /> Privado 🔒
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-normal">Apenas Administradores</span>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddTopicModal(false)}
+                  onClick={() => {
+                    setShowAddTopicModal(false);
+                    setNewTopicIsPrivate(false);
+                  }}
                   className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded text-xs font-bold transition-colors font-mono"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors font-mono"
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors font-mono shadow-md"
                 >
                   Criar Tópico
                 </button>
@@ -3163,10 +3324,134 @@ export default function App() {
     );
   };
 
+  const renderEmailTemplateModal = () => {
+    if (!emailTemplateModalUser) return null;
+    const emailBody = generateProfessionalEmailText(emailTemplateModalUser);
+    const mailtoUrl = emailTemplateModalUser.email
+      ? `mailto:${emailTemplateModalUser.email}?subject=${encodeURIComponent('Suas Credenciais de Acesso à Plataforma - My Social')}&body=${encodeURIComponent(emailBody)}`
+      : '';
+    const cleanPhone = (emailTemplateModalUser.contact || '').replace(/\D/g, '');
+    const waUrl = cleanPhone
+      ? `https://wa.me/${cleanPhone.length <= 11 ? '55' + cleanPhone : cleanPhone}?text=${encodeURIComponent(emailBody)}`
+      : '';
+
+    return (
+      <AnimatePresence>
+        {emailTemplateModalUser && (
+          <div className="fixed inset-0 bg-black/85 flex items-center justify-center p-4 z-[100] backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-zinc-950 border border-emerald-800 p-5 sm:p-6 rounded-md w-full max-w-2xl shadow-2xl relative font-mono text-xs max-h-[90vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-emerald-900/40 shrink-0">
+                <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                  <Mail className="w-4 h-4 text-emerald-400" />
+                  <span>MENSAGEM PROFISSIONAL DE CREDENCIAIS</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setEmailTemplateModalUser(null);
+                    setCopiedEmailSuccess(false);
+                  }}
+                  className="text-zinc-500 hover:text-emerald-400 p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-zinc-400 text-[11px] mb-3 shrink-0">
+                Mensagem oficial formatada com credenciais para enviar ao usuário <strong className="text-emerald-300">{emailTemplateModalUser.name}</strong> (@{emailTemplateModalUser.username}).
+              </p>
+
+              {/* Email Content Box */}
+              <div className="flex-1 overflow-y-auto bg-black/90 border border-emerald-900/70 p-4 rounded text-zinc-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-800 selection:text-white select-all scrollbar-thin scrollbar-thumb-emerald-900">
+                {emailBody}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-emerald-900/40 shrink-0 mt-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(emailBody);
+                      setCopiedEmailSuccess(true);
+                      setTimeout(() => setCopiedEmailSuccess(false), 3000);
+                    }}
+                    className={`px-4 py-2.5 rounded font-bold text-xs flex items-center gap-2 transition-all shadow-lg ${
+                      copiedEmailSuccess
+                        ? 'bg-emerald-500 text-black border border-emerald-400 scale-105'
+                        : 'bg-emerald-700 hover:bg-emerald-600 text-white'
+                    }`}
+                  >
+                    {copiedEmailSuccess ? (
+                      <>
+                        <Check className="w-4 h-4 text-black" />
+                        <span>MENSAGEM COPIADA COM SUCESSO!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>COPIAR TEXTO DO E-MAIL</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {emailTemplateModalUser.email && (
+                    <a
+                      href={mailtoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2.5 bg-blue-950/70 hover:bg-blue-900/80 text-blue-300 border border-blue-800 rounded font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <Mail className="w-3.5 h-3.5" />
+                      <span>Abrir no E-mail</span>
+                    </a>
+                  )}
+                  {waUrl && (
+                    <a
+                      href={waUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 rounded font-bold text-xs flex items-center gap-1.5 transition-colors"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      setEmailTemplateModalUser(null);
+                      setCopiedEmailSuccess(false);
+                    }}
+                    className="px-4 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded font-bold text-xs transition-colors"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    );
+  };
+
   const renderGroupTopicsModal = () => {
     const group = groups.find(g => g.id === currentGroupId);
     if (!group || !showGroupTopicsModal) return null;
+    const isGrpAdmin = (group.owners || []).includes(currentUser?.username || '') || isGeneralAdmin;
     const topicsList = group.topics || ['Geral'];
+
+    const visibleTopics = topicsList.filter(t => {
+      const isPrivate = (group.privateTopics || []).includes(t);
+      if (isPrivate && !isGrpAdmin) return false;
+      return true;
+    });
 
     return (
       <AnimatePresence>
@@ -3176,12 +3461,12 @@ export default function App() {
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-zinc-950 border border-emerald-800 p-5 sm:p-6 rounded-md w-full max-w-md shadow-2xl relative font-mono text-xs"
+              className="bg-zinc-950 border border-emerald-800 p-5 sm:p-6 rounded-md w-full max-w-lg shadow-2xl relative font-mono text-xs max-h-[90vh] flex flex-col"
             >
-              <div className="flex justify-between items-center mb-4 pb-2 border-b border-emerald-900/40">
+              <div className="flex justify-between items-center mb-3 pb-2 border-b border-emerald-900/40 shrink-0">
                 <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
                   <Hash className="w-4 h-4 text-emerald-400" />
-                  <span>TÓPICOS DO GRUPO</span>
+                  <span>TÓPICOS & CANAIS DO GRUPO</span>
                 </div>
                 <button
                   onClick={() => setShowGroupTopicsModal(false)}
@@ -3191,80 +3476,190 @@ export default function App() {
                 </button>
               </div>
 
-              <p className="text-zinc-400 text-[11px] mb-4">
-                Grupo: <strong className="text-emerald-300">{group.name}</strong>. Selecione um tópico para filtrar as conversas ou crie um novo tópico abaixo.
-              </p>
+              <div className="flex items-center justify-between gap-2 mb-3 bg-black/60 p-2.5 rounded border border-emerald-950 shrink-0">
+                <div>
+                  <span className="text-[10px] text-zinc-500 block">GRUPO ATUAL:</span>
+                  <span className="text-emerald-300 font-bold text-xs">{group.name}</span>
+                </div>
+                {isGrpAdmin && (
+                  <button
+                    onClick={() => handleToggleGroupPrivacy(group.id)}
+                    className={`px-2.5 py-1 rounded text-[10px] font-bold border flex items-center gap-1 transition-colors ${
+                      group.isPrivate
+                        ? 'bg-amber-950/80 text-amber-300 border-amber-700'
+                        : 'bg-emerald-950/80 text-emerald-300 border-emerald-700'
+                    }`}
+                    title="Clique para alternar privacidade do grupo"
+                  >
+                    {group.isPrivate ? <Lock className="w-3 h-3 text-amber-400" /> : <Globe className="w-3 h-3 text-emerald-400" />}
+                    <span>{group.isPrivate ? 'Grupo Privado 🔒' : 'Grupo Aberto 🌐'}</span>
+                  </button>
+                )}
+              </div>
 
-              {/* Lista de Tópicos */}
-              <div className="space-y-1.5 max-h-60 overflow-y-auto mb-5 pr-1 scrollbar-thin scrollbar-thumb-emerald-900">
-                {topicsList.map(tName => {
+              {/* Lista de Tópicos com controles administrativos */}
+              <div className="flex-1 overflow-y-auto space-y-2 mb-4 pr-1 scrollbar-thin scrollbar-thumb-emerald-900">
+                {visibleTopics.map(tName => {
                   const isSelected = (currentTopic || 'Geral') === tName;
                   const isClosed = (group.closedTopics || []).includes(tName);
+                  const isPrivate = (group.privateTopics || []).includes(tName);
+
                   return (
-                    <button
+                    <div
                       key={tName}
-                      onClick={() => {
-                        setCurrentTopic(tName);
-                        setShowGroupTopicsModal(false);
-                      }}
-                      className={`w-full text-left p-3 rounded border transition-all flex items-center justify-between font-bold ${
+                      className={`p-2.5 sm:p-3 rounded border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
                         isSelected
-                          ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200'
-                          : 'bg-zinc-900/60 border-emerald-900/30 text-emerald-500 hover:bg-emerald-950/20 hover:border-emerald-800/50'
+                          ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                          : 'bg-zinc-900/70 border-emerald-900/40 text-emerald-400 hover:bg-emerald-950/30'
                       }`}
                     >
-                      <span className="flex items-center gap-2">
-                        <Hash className={`w-3.5 h-3.5 ${isSelected ? 'text-emerald-400 animate-pulse' : 'text-emerald-600'}`} />
-                        #{tName}
-                        {isClosed && <Lock className="w-3 h-3 text-red-400/80 ml-1" title="Tópico Fechado" />}
-                      </span>
-                      {isSelected && (
-                        <span className="text-[10px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black uppercase tracking-wider scale-90">
-                          Ativo
-                        </span>
+                      <button
+                        onClick={() => {
+                          setCurrentTopic(tName);
+                          setShowGroupTopicsModal(false);
+                        }}
+                        className="flex items-center gap-2 font-bold text-left flex-1 min-w-0"
+                      >
+                        <Hash className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-emerald-400 animate-pulse' : 'text-emerald-600'}`} />
+                        <span className="truncate">#{tName}</span>
+
+                        {isPrivate ? (
+                          <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.2 rounded font-mono shrink-0 flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5" /> PRIVADO
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-emerald-950/60 text-emerald-400 border border-emerald-900 px-1.5 py-0.2 rounded font-mono shrink-0 flex items-center gap-0.5">
+                            <Globe className="w-2.5 h-2.5" /> ABERTO
+                          </span>
+                        )}
+
+                        {isClosed && (
+                          <span className="text-[10px] bg-red-950 text-red-300 border border-red-800 px-1.5 py-0.2 rounded font-mono shrink-0">
+                            FECHADO
+                          </span>
+                        )}
+
+                        {isSelected && (
+                          <span className="text-[9px] bg-emerald-500 text-black px-1.5 py-0.5 rounded font-black uppercase tracking-wider ml-auto">
+                            SELECIONADO
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Controles do Administrador do Grupo para cada Tópico */}
+                      {isGrpAdmin && (
+                        <div className="flex items-center gap-1 shrink-0 pt-1 sm:pt-0 border-t sm:border-t-0 border-emerald-900/30">
+                          {tName.toLowerCase() !== 'geral' && (
+                            <>
+                              <button
+                                onClick={() => handleToggleTopicPrivacy(group.id, tName)}
+                                className={`p-1.5 rounded border text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                                  isPrivate
+                                    ? 'bg-amber-950 text-amber-300 border-amber-700 hover:bg-emerald-950 hover:text-emerald-300'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-amber-950 hover:text-amber-300'
+                                }`}
+                                title={isPrivate ? "Tornar Aberto a todos" : "Tornar Privado (Apenas Admins)"}
+                              >
+                                {isPrivate ? <Lock className="w-3 h-3 text-amber-400" /> : <Globe className="w-3 h-3 text-emerald-400" />}
+                                <span className="hidden xs:inline">{isPrivate ? 'Privado' : 'Aberto'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleToggleTopicStatus(group.id, tName)}
+                                className={`p-1.5 rounded border text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                                  isClosed
+                                    ? 'bg-red-950 text-red-300 border-red-700 hover:bg-emerald-950 hover:text-emerald-300'
+                                    : 'bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-red-950 hover:text-red-300'
+                                }`}
+                                title={isClosed ? "Reabrir para postagens de membros" : "Fechar postagens (Apenas Admins postam)"}
+                              >
+                                {isClosed ? <Unlock className="w-3 h-3 text-emerald-400" /> : <Lock className="w-3 h-3 text-red-400" />}
+                                <span className="hidden xs:inline">{isClosed ? 'Fechado' : 'Liberado'}</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleRemoveTopicFromGroup(group.id, tName)}
+                                className="p-1.5 bg-red-950/40 hover:bg-red-900/60 text-red-400 border border-red-900/60 rounded transition-colors"
+                                title="Excluir Tópico"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
 
-              {/* Opção Criar Tópico - Apenas Administradores do Grupo */}
-              {((group as any).owner === currentUser?.username || isGeneralAdmin) && (
-                <div className="pt-4 border-t border-emerald-900/40">
-                  <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-wider text-[10px]">
-                    Criar Novo Tópico
+              {/* Opção Criar Tópico com seletor Aberto / Privado */}
+              {isGrpAdmin && (
+                <div className="pt-3 border-t border-emerald-900/40 shrink-0 bg-black/40 p-3 rounded">
+                  <h4 className="text-emerald-400 font-bold mb-2 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+                    <Plus className="w-3 h-3 text-emerald-400" /> Criar Novo Tópico
                   </h4>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newTopicName}
-                      onChange={(e) => setNewTopicName(e.target.value)}
-                      placeholder="Nome do tópico (ex: Projetos)..."
-                      maxLength={25}
-                      className="flex-1 bg-zinc-900 border border-emerald-900 text-emerald-200 px-3 py-2 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          if (newTopicName.trim()) {
-                            handleAddTopicToGroup(group.id, newTopicName);
-                            setNewTopicName('');
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newTopicName}
+                        onChange={(e) => setNewTopicName(e.target.value)}
+                        placeholder="Nome do tópico (ex: Projetos, VIP)..."
+                        maxLength={25}
+                        className="flex-1 bg-zinc-900 border border-emerald-900 text-emerald-200 px-3 py-2 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            if (newTopicName.trim()) {
+                              handleAddTopicToGroup(group.id, newTopicName, newTopicIsPrivate);
+                              setNewTopicName('');
+                            }
                           }
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (newTopicName.trim()) {
-                          handleAddTopicToGroup(group.id, newTopicName);
-                          setNewTopicName('');
-                        } else {
-                          showAlert('Por favor, digite um nome válido para o tópico.', 'CAMPO VAZIO', 'warning');
-                        }
-                      }}
-                      className="px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors shrink-0"
-                    >
-                      Criar Tópico
-                    </button>
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setNewTopicIsPrivate(false)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition-colors flex items-center gap-1 ${
+                            !newTopicIsPrivate
+                              ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
+                              : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Globe className="w-3 h-3" /> Aberto
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewTopicIsPrivate(true)}
+                          className={`px-2.5 py-1 rounded text-[11px] font-bold border transition-colors flex items-center gap-1 ${
+                            newTopicIsPrivate
+                              ? 'bg-amber-950 text-amber-300 border-amber-500'
+                              : 'bg-zinc-900 text-zinc-500 border-zinc-800 hover:text-zinc-300'
+                          }`}
+                        >
+                          <Lock className="w-3 h-3" /> Privado
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          if (newTopicName.trim()) {
+                            handleAddTopicToGroup(group.id, newTopicName, newTopicIsPrivate);
+                            setNewTopicName('');
+                          } else {
+                            showAlert('Por favor, digite um nome válido para o tópico.', 'CAMPO VAZIO', 'warning');
+                          }
+                        }}
+                        className="px-4 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded text-xs font-bold transition-colors shrink-0"
+                      >
+                        Salvar Tópico
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -3662,6 +4057,51 @@ export default function App() {
               </div>
 
               <div className="space-y-5 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-emerald-900 flex-1">
+                {/* Group Privacy Setting (Open vs Private) */}
+                {(groupSettingsTarget.owners.includes(currentUser?.username || '') || isAdmin) && (
+                  <div className="bg-black border border-emerald-900/60 p-3.5 rounded-sm shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {groupSettingsTarget.isPrivate ? (
+                          <Lock className="w-4 h-4 text-amber-400" />
+                        ) : (
+                          <Globe className="w-4 h-4 text-emerald-400" />
+                        )}
+                        <h3 className="text-emerald-400 text-xs font-bold uppercase tracking-wider">
+                          PRIVACIDADE DO GRUPO: {groupSettingsTarget.isPrivate ? 'PRIVADO 🔒' : 'ABERTO 🌐'}
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {groupSettingsTarget.isPrivate 
+                          ? 'Apenas membros convidados com link podem ver e interagir.' 
+                          : 'Grupo aberto na comunidade com acesso aos tópicos livres.'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleGroupPrivacy(groupSettingsTarget.id)}
+                      className={`px-3.5 py-2 rounded text-xs font-bold border flex items-center gap-1.5 transition-all self-start sm:self-auto shrink-0 ${
+                        groupSettingsTarget.isPrivate
+                          ? 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border-amber-600'
+                          : 'bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border-emerald-600'
+                      }`}
+                    >
+                      {groupSettingsTarget.isPrivate ? (
+                        <>
+                          <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Mudar para Aberto 🌐</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Mudar para Privado 🔒</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+
                 {/* Invite Link */}
                 <div className="bg-black border border-emerald-900/60 p-3.5 rounded-sm shrink-0">
                   <h3 className="text-emerald-500 text-xs font-bold mb-2 uppercase tracking-wider flex items-center gap-1.5">
@@ -3783,9 +4223,28 @@ export default function App() {
                           </div>
                         ) : (
                           <>
-                            <span className="flex items-center gap-1">#{t} {(groupSettingsTarget.closedTopics || []).includes(t) && <Lock className="w-2.5 h-2.5 text-red-500/80" title="Tópico Fechado" />}</span>
+                            <span className="flex items-center gap-1">
+                              #{t}
+                              {(groupSettingsTarget.privateTopics || []).includes(t) && (
+                                <Lock className="w-2.5 h-2.5 text-amber-400" title="Tópico Privado (Apenas Admins)" />
+                              )}
+                              {(groupSettingsTarget.closedTopics || []).includes(t) && (
+                                <Lock className="w-2.5 h-2.5 text-red-500/80" title="Tópico Fechado" />
+                              )}
+                            </span>
                             {t.toLowerCase() !== 'geral' && (groupSettingsTarget.owners.includes(currentUser?.username || '') || isAdmin) && (
                               <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleToggleTopicPrivacy(groupSettingsTarget.id, t)}
+                                  className={`p-1 rounded text-[10px] font-bold flex items-center gap-0.5 transition-colors ${
+                                    (groupSettingsTarget.privateTopics || []).includes(t)
+                                      ? 'text-amber-400 hover:text-amber-300'
+                                      : 'text-zinc-500 hover:text-amber-400'
+                                  }`}
+                                  title={(groupSettingsTarget.privateTopics || []).includes(t) ? 'Tópico Privado (Clique para tornar aberto)' : 'Tópico Aberto (Clique para tornar privado)'}
+                                >
+                                  {(groupSettingsTarget.privateTopics || []).includes(t) ? <Lock className="w-3 h-3 text-amber-400" /> : <Globe className="w-3 h-3 text-emerald-400" />}
+                                </button>
                                 <button
                                   onClick={() => {
                                     setEditingTopicName(t);
@@ -5175,7 +5634,7 @@ export default function App() {
                     value={loginUsername}
                     onChange={(e) => setLoginUsername(e.target.value)}
                     className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors"
-                    placeholder="dev_ninja"
+                    placeholder="ex: usuario123"
                   />
                 </div>
               </div>
@@ -5673,6 +6132,7 @@ export default function App() {
         {renderRemoveFromGroupModal()}
         {renderItemDeleteConfirmModal()}
         {renderGroupTopicsModal()}
+      {renderEmailTemplateModal()}
       </div>
     );
   }    if (view === 'dev_analytics') {
@@ -5910,15 +6370,35 @@ export default function App() {
                               )}
                             </td>
                             <td className="p-3">
-                              {user.isBanned ? (
-                                <span className="text-red-400 font-bold text-[10px] bg-red-950/60 border border-red-800 px-2 py-0.5 rounded">
-                                  BANIDO
-                                </span>
-                              ) : (
-                                <span className="text-emerald-500 font-bold text-[10px] bg-emerald-950/40 border border-emerald-900/60 px-2 py-0.5 rounded">
-                                  ATIVO
-                                </span>
-                              )}
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEmailTemplateModalUser({
+                                      name: user.name || '',
+                                      username: user.username || '',
+                                      password: user.password || '',
+                                      role: user.role || 'Membro',
+                                      email: user.email || '',
+                                      contact: user.phone || ''
+                                    });
+                                  }}
+                                  className="px-2.5 py-1 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded text-[11px] font-bold flex items-center gap-1 transition-colors shadow-sm"
+                                  title="Copiar mensagem profissional com credenciais para enviar ao cliente"
+                                >
+                                  <Mail className="w-3 h-3 text-emerald-400" />
+                                  <span>Copiar E-mail</span>
+                                </button>
+                                {user.isBanned ? (
+                                  <span className="text-red-400 font-bold text-[10px] bg-red-950/60 border border-red-800 px-2 py-0.5 rounded">
+                                    BANIDO
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-500 font-bold text-[10px] bg-emerald-950/40 border border-emerald-900/60 px-2 py-0.5 rounded">
+                                    ATIVO
+                                  </span>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -6360,7 +6840,9 @@ export default function App() {
               {/* 3-DOTS POPUP DROPDOWN MENU */}
               <AnimatePresence>
                 {showHeaderAdminMenu && (
-                  <motion.div
+                  <>
+                    <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setShowHeaderAdminMenu(false)} />
+                    <motion.div
                     initial={{ opacity: 0, scale: 0.95, y: -5 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: -5 }}
@@ -6504,11 +6986,81 @@ export default function App() {
                       <span>Desconectar / Sair</span>
                     </button>
                   </motion.div>
+                  </>
                 )}
               </AnimatePresence>
             </div>
           </div>
         </header>
+
+        {/* Horizontal Fast Topic Bar for Groups */}
+        {currentGroupId && (() => {
+          const currentGroup = groups.find(g => g.id === currentGroupId);
+          if (!currentGroup) return null;
+          const allTopics = currentGroup.topics || ['Geral'];
+          const isGrpAdmin = (currentGroup.owners || []).includes(currentUser?.username || '') || isGeneralAdmin;
+          const visibleTopics = allTopics.filter(t => {
+            const isPrivate = (currentGroup.privateTopics || []).includes(t);
+            if (isPrivate && !isGrpAdmin) return false;
+            return true;
+          });
+
+          return (
+            <div className="bg-zinc-950/95 border-b border-emerald-900/60 px-3 py-1.5 flex items-center justify-between gap-2 shrink-0 z-20 overflow-x-auto scrollbar-none font-mono text-xs">
+              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-none">
+                <span className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider shrink-0 flex items-center gap-1 mr-1">
+                  <Hash className="w-3 h-3 text-emerald-500" /> Tópicos:
+                </span>
+                {visibleTopics.map(tName => {
+                  const isSelected = (currentTopic || 'Geral') === tName;
+                  const isClosed = (currentGroup.closedTopics || []).includes(tName);
+                  const isPrivate = (currentGroup.privateTopics || []).includes(tName);
+
+                  return (
+                    <button
+                      key={tName}
+                      onClick={() => setCurrentTopic(tName)}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 shrink-0 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]'
+                          : 'bg-zinc-900/90 text-emerald-400 hover:bg-emerald-950/60 border border-emerald-900/60'
+                      }`}
+                    >
+                      <span>#{tName}</span>
+                      {isPrivate && <Lock className={`w-2.5 h-2.5 ${isSelected ? 'text-black' : 'text-amber-400'}`} title="Tópico Privado (Apenas Administradores)" />}
+                      {isClosed && <Lock className={`w-2.5 h-2.5 ${isSelected ? 'text-black' : 'text-red-400'}`} title="Tópico Fechado para postagens" />}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Action buttons for quick topic management */}
+              <div className="flex items-center gap-1 shrink-0 pl-2 border-l border-emerald-900/50">
+                {isGrpAdmin && (
+                  <button
+                    onClick={() => {
+                      setNewTopicName('');
+                      setNewTopicIsPrivate(false);
+                      setShowAddTopicModal(true);
+                    }}
+                    className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded text-[10px] font-bold flex items-center gap-1 transition-colors shrink-0"
+                    title="Criar novo tópico"
+                  >
+                    <Plus className="w-3 h-3 text-emerald-400" />
+                    <span className="hidden sm:inline">Criar Tópico</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowGroupTopicsModal(true)}
+                  className="p-1 text-emerald-500 hover:text-emerald-300 hover:bg-emerald-950/40 rounded transition-colors"
+                  title="Gerenciar Tópicos e Permissões"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Pinned Messages Banner */}
         {(() => {
