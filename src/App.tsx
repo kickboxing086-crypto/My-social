@@ -1,9 +1,20 @@
 import { motion, AnimatePresence } from 'motion/react';
 import React from "react";
-import { Globe, Briefcase, Lock, Unlock, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { Globe, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
+
+type PasswordRecoveryRequest = {
+  id?: string;
+  name: string;
+  username: string;
+  contact: string;
+  email: string;
+  createdAt: any;
+  status: 'pending' | 'resolved';
+  resolvedAt?: any;
+};
 
 type DevUser = {
   id?: string;
@@ -14,6 +25,7 @@ type DevUser = {
   role: string;
   password?: string;
   isBanned?: boolean;
+  lastActive?: any;
   bannedAt?: any;
   banReason?: string;
   createdAt?: any;
@@ -298,7 +310,7 @@ export default function App() {
 
   const [isSearching, setIsSearching] = useState(false);
 
-  const [view, setView] = useState<'login' | 'register' | 'chat' | 'admin' | 'dev_analytics'>('login');
+  const [view, setView] = useState<'login' | 'register' | 'chat' | 'admin' | 'dev_analytics' | 'recover_password'>('login');
   
   const [currentUser, setCurrentUser] = useState<DevUser | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -375,6 +387,18 @@ export default function App() {
   const [regName, setRegName] = useState('');
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [recName, setRecName] = useState('');
+  const [recUsername, setRecUsername] = useState('');
+  const [recContact, setRecContact] = useState('');
+  const [recEmail, setRecEmail] = useState('');
+  const [isSubmittingRecovery, setIsSubmittingRecovery] = useState(false);
+  const [recoveryRequests, setRecoveryRequests] = useState<PasswordRecoveryRequest[]>([]);
+  const [devAnalyticsTab, setDevAnalyticsTab] = useState<'users' | 'recovery'>('users');
+  const [devUserSearch, setDevUserSearch] = useState('');
+  const [devRecFilter, setDevRecFilter] = useState<'all' | 'pending' | 'resolved'>('all');
+  const [copiedPasswordId, setCopiedPasswordId] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(Date.now());
+
   const [regRole, setRegRole] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
@@ -445,6 +469,13 @@ export default function App() {
   const [micTestActive, setMicTestActive] = useState(false);
   const [micAudioLevel, setMicAudioLevel] = useState(0);
 
+
+
+  const onlineUsersCount = allMembers.filter(m => {
+    if (!m.lastActive) return false;
+    const lastActiveTime = m.lastActive.toDate ? m.lastActive.toDate().getTime() : new Date(m.lastActive).getTime();
+    return (Date.now() - lastActiveTime) < 300000; // 5 minutes
+  }).length;
 
   const isGeneralAdmin = !!(
     currentUser?.role?.toLowerCase() === 'administrador geral' ||
@@ -595,6 +626,18 @@ export default function App() {
 
       const savedUsername = localStorage.getItem('hud_devs_active_user');
       if (savedUsername) {
+        if (savedUsername === 'Ssilva_7') {
+          setCurrentUser({
+            username: 'Ssilva_7',
+            name: 'Dev Analytics Admin',
+            role: 'Monitor Geral',
+            shortId: 'DEV-000',
+            isBanned: false
+          });
+          setView('dev_analytics');
+          setIsLoading(false);
+          return;
+        }
         try {
           const q = query(collection(db, 'users'), where('username', '==', savedUsername));
           
@@ -678,6 +721,51 @@ export default function App() {
       return () => { unsubscribeMessages(); unsubscribeGroups(); };
     }
   }, [view, currentUser]);
+    // Timer tick for real-time online calculations
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Real-time active presence heartbeat
+  useEffect(() => {
+    if (!currentUser || currentUser.username === 'Ssilva_7') return;
+    const userId = currentUser.uid || currentUser.id;
+    if (!userId) return;
+
+    const updateActive = async () => {
+      try {
+        await updateDoc(doc(db, 'users', userId), { lastActive: serverTimestamp() });
+      } catch (err) {}
+    };
+
+    updateActive();
+    const interval = setInterval(updateActive, 25000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') updateActive();
+    };
+    window.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [currentUser]);
+
+  // Listener for Password Recovery Requests (Dev Analytics)
+  useEffect(() => {
+    if (currentUser?.username === 'Ssilva_7' || view === 'dev_analytics') {
+      const qRec = query(collection(db, 'password_recovery_requests'), orderBy('createdAt', 'desc'));
+      const unsub = onSnapshot(qRec, (snapshot) => {
+        const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PasswordRecoveryRequest));
+        setRecoveryRequests(list);
+      }, (err) => {
+        console.error("Erro ao escutar solicitações de recuperação:", err);
+      });
+      return () => unsub();
+    }
+  }, [currentUser, view]);
+
+
   // Listener for all registered group members
   useEffect(() => {
     if (currentUser) {
@@ -901,6 +989,62 @@ export default function App() {
     });
   };
 
+      const handleRecoverPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recName.trim() || !recUsername.trim() || !recContact.trim() || !recEmail.trim()) {
+      showAlert('Por favor, preencha todos os campos para prosseguir.', 'CAMPOS OBRIGATÓRIOS', 'warning');
+      return;
+    }
+    setIsSubmittingRecovery(true);
+    try {
+      const cleanUser = recUsername.trim().toLowerCase().replace('@', '');
+      await addDoc(collection(db, 'password_recovery_requests'), {
+        name: recName.trim(),
+        username: cleanUser,
+        contact: recContact.trim(),
+        email: recEmail.trim(),
+        createdAt: serverTimestamp(),
+        status: 'pending'
+      });
+      showAlert('Sua solicitação foi recebida com sucesso. Em breve, entraremos em contato.', 'SOLICITAÇÃO RECEBIDA', 'success');
+      setRecName('');
+      setRecUsername('');
+      setRecContact('');
+      setRecEmail('');
+      setView('login');
+    } catch (err) {
+      console.error(err);
+      showAlert('Erro ao enviar solicitação de recuperação. Tente novamente mais tarde.', 'FALHA DE ENVIO', 'error');
+    } finally {
+      setIsSubmittingRecovery(false);
+    }
+  };
+
+  const handleToggleRecoveryStatus = async (reqId: string, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === 'resolved' ? 'pending' : 'resolved';
+      await updateDoc(doc(db, 'password_recovery_requests', reqId), {
+        status: newStatus,
+        resolvedAt: newStatus === 'resolved' ? serverTimestamp() : null
+      });
+      showAlert(newStatus === 'resolved' ? 'Solicitação marcada como atendida!' : 'Solicitação reaberta como pendente!', 'STATUS ATUALIZADO', 'success');
+    } catch (err) {
+      console.error(err);
+      showAlert('Erro ao atualizar status.', 'ERRO', 'error');
+    }
+  };
+
+  const handleDeleteRecoveryRequest = async (reqId: string) => {
+    try {
+      await deleteDoc(doc(db, 'password_recovery_requests', reqId));
+      showAlert('Registro de recuperação removido com sucesso.', 'EXCLUÍDO', 'info');
+    } catch (err) {
+      console.error(err);
+      showAlert('Erro ao remover solicitação.', 'ERRO', 'error');
+    }
+  };
+
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (regPassword.length > 6) {
@@ -943,7 +1087,9 @@ export default function App() {
         role: regRole.trim() || 'Membro',
         password: regPassword,
         shortId: generateShortId(),
-        isBanned: false
+        isBanned: false,
+        lastActive: serverTimestamp(),
+        createdAt: serverTimestamp()
       };
       
       const docRef = await addDoc(collection(db, 'users'), newUser);
@@ -1020,13 +1166,15 @@ export default function App() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loginUsername === 'Ssilva_7' && loginPassword === '072131') {
-      setCurrentUser({
+      const adminDevUser: DevUser = {
         username: 'Ssilva_7',
         name: 'Dev Analytics Admin',
-        role: 'Monitor',
+        role: 'Monitor Geral',
         shortId: 'DEV-000',
         isBanned: false
-      });
+      };
+      localStorage.setItem('hud_devs_active_user', 'Ssilva_7');
+      setCurrentUser(adminDevUser);
       setView('dev_analytics');
       showAlert('Dashboard Analítico Ativado. Acesso exclusivo de visualização do sistema.', 'SISTEMA DE MONITORAMENTO', 'success');
       return;
@@ -4999,8 +5147,7 @@ export default function App() {
   );
 
 // --- VIEWS ---
-
-  if (view === 'login' || view === 'register') {
+  if (view === 'login' || view === 'register' || view === 'recover_password') {
     return (
       <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-4 font-mono">
         <div className="w-full max-w-md bg-black border border-emerald-900/50 p-8 shadow-2xl relative overflow-hidden rounded-sm">
@@ -5061,13 +5208,17 @@ export default function App() {
                 CONECTAR
               </button>
 
-              <div className="text-center mt-6 flex flex-col gap-2">
-                <button type="button" onClick={() => { setView('register'); setShowPolicy(true); }} className="text-emerald-600 hover:text-emerald-400 text-sm transition-colors">
+              <div className="text-center mt-6 flex flex-col gap-2.5">
+                <button type="button" onClick={() => setView('recover_password')} className="text-amber-500 hover:text-amber-400 text-xs font-bold transition-colors flex items-center justify-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  Esqueceu sua senha? Recuperar senha
+                </button>
+                <button type="button" onClick={() => { setView('register'); setShowPolicy(true); }} className="text-emerald-600 hover:text-emerald-400 text-xs transition-colors">
                   Solicitar novo acesso (Registro)
                 </button>
               </div>
             </form>
-          ) : (
+          ) : view === 'register' ? (
             <form onSubmit={handleRegister} className="space-y-4 relative z-10">
               <div>
                 <label className="block text-emerald-700 text-xs mb-1 font-bold">NOME REAL</label>
@@ -5079,7 +5230,6 @@ export default function App() {
                   className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
               </div>
-
               <div>
                 <label className="block text-emerald-700 text-xs mb-1 font-bold">USUÁRIO DE REDE (ÚNICO)</label>
                 <input
@@ -5090,7 +5240,6 @@ export default function App() {
                   className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 px-4 py-2 focus:outline-none focus:border-emerald-500 transition-colors"
                 />
               </div>
-
               <div>
                 <label className="block text-emerald-400 text-xs mb-1 font-bold uppercase tracking-wider">
                   CARGO / FUNÇÃO (OPCIONAL)
@@ -5106,7 +5255,6 @@ export default function App() {
                   className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 px-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors rounded-sm"
                 />
               </div>
-
               <div>
                 <label className="block text-emerald-700 text-xs mb-1 font-bold">SENHA DE ACESSO (MÁX 6 DÍGITOS)</label>
                 <div className="relative">
@@ -5127,14 +5275,101 @@ export default function App() {
                   </button>
                 </div>
               </div>
-
               <button type="submit" className="w-full bg-emerald-900/40 hover:bg-emerald-800 text-emerald-300 border border-emerald-700 py-3 font-bold tracking-widest transition-colors mt-6 flex items-center justify-center gap-2">
                 <UserPlus className="w-4 h-4" />
                 CRIAR CREDENCIAL
               </button>
+              <div className="text-center mt-6 flex flex-col gap-2">
+                <button type="button" onClick={() => setView('login')} className="text-emerald-600 hover:text-emerald-400 text-sm transition-colors flex items-center justify-center gap-2 w-full">
+                  <ArrowLeft className="w-4 h-4" />
+                  Voltar ao Login
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* RECUPERAR SENHA FORM */
+            <form onSubmit={handleRecoverPassword} className="space-y-4 relative z-10">
+              <div className="bg-emerald-950/40 border border-emerald-800/60 p-3.5 rounded-sm text-center mb-4">
+                <p className="text-emerald-300 text-xs leading-relaxed font-mono font-medium">
+                  Caro usuário, preencha com esses dados que você conhece, para que possamos recuperar sua senha.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-emerald-700 text-xs mb-1 font-bold">NOME</label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={recName}
+                    onChange={(e) => setRecName(e.target.value)}
+                    placeholder="Seu nome completo"
+                    className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-emerald-700 text-xs mb-1 font-bold">NOME DE USUÁRIO</label>
+                <div className="relative">
+                  <Code className="w-4 h-4 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={recUsername}
+                    onChange={(e) => setRecUsername(e.target.value)}
+                    placeholder="Seu @usuário"
+                    className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-emerald-700 text-xs mb-1 font-bold">CONTATO (WHATSAPP / TELEFONE)</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    required
+                    value={recContact}
+                    onChange={(e) => setRecContact(e.target.value)}
+                    placeholder="Ex: (11) 98765-4321"
+                    className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-emerald-700 text-xs mb-1 font-bold">EMAIL</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    required
+                    value={recEmail}
+                    onChange={(e) => setRecEmail(e.target.value)}
+                    placeholder="seuemail@exemplo.com"
+                    className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isSubmittingRecovery}
+                className="w-full bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700 py-3 font-bold tracking-widest transition-colors mt-6 flex items-center justify-center gap-2 rounded-sm shadow-md disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                {isSubmittingRecovery ? 'ENVIANDO...' : 'ENVIAR SOLICITAÇÃO'}
+              </button>
 
               <div className="text-center mt-6">
-                <button type="button" onClick={() => setView('login')} className="text-emerald-600 hover:text-emerald-400 text-sm transition-colors flex items-center justify-center gap-2 w-full">
+                <button 
+                  type="button" 
+                  onClick={() => setView('login')} 
+                  className="text-emerald-600 hover:text-emerald-400 text-sm transition-colors flex items-center justify-center gap-2 w-full font-bold"
+                >
                   <ArrowLeft className="w-4 h-4" />
                   Voltar ao Login
                 </button>
@@ -5148,7 +5383,6 @@ export default function App() {
             </button>
           </div>
         </div>
-
         {showPolicy && renderPrivacyPolicy()}
       </div>
     );
@@ -5441,57 +5675,435 @@ export default function App() {
         {renderGroupTopicsModal()}
       </div>
     );
-  }  if (view === 'dev_analytics') {
+  }    if (view === 'dev_analytics') {
+    const pendingRecoveryCount = recoveryRequests.filter(r => r.status === 'pending').length;
+    const filteredUsers = allMembers.filter(user => {
+      if (!devUserSearch) return true;
+      const q = devUserSearch.toLowerCase();
+      return (
+        user.name?.toLowerCase().includes(q) ||
+        user.username?.toLowerCase().includes(q) ||
+        user.role?.toLowerCase().includes(q)
+      );
+    });
+
+    const filteredRequests = recoveryRequests.filter(req => {
+      if (devRecFilter === 'all') return true;
+      return req.status === devRecFilter;
+    });
+
     return (
-      <div className="h-[100dvh] bg-black text-emerald-400 font-mono flex flex-col items-center sm:p-4 overflow-hidden overflow-y-auto scrollbar-thin">
-        <div className="w-full max-w-5xl flex flex-col gap-4 p-4 border border-emerald-900/50 bg-zinc-950 sm:rounded-sm mt-4 sm:mt-0">
-           <header className="flex justify-between items-center pb-4 border-b border-emerald-900/50">
-             <div className="flex items-center gap-2">
-               <Server className="w-6 h-6 text-emerald-500" />
-               <h1 className="text-lg sm:text-xl font-bold uppercase tracking-widest text-emerald-300">Dev Analytics Dashboard</h1>
-             </div>
-             <button 
-                onClick={() => {
-                  setCurrentUser(null);
-                  setView('login');
-                }} 
-                className="px-3 py-1.5 bg-red-950/40 text-red-400 border border-red-900/50 rounded-sm font-bold text-xs hover:bg-red-900/40 transition-colors"
-             >
-                SAIR
-             </button>
-           </header>
-           
-           <div className="bg-black/40 border border-emerald-900/30 p-4 rounded-sm shadow-inner">
-             <h2 className="text-sm font-bold text-emerald-500 mb-4 flex items-center gap-2 uppercase tracking-wider">
-               <Users className="w-4 h-4" /> Base de Dados de Usuários ({allMembers.length})
-             </h2>
-             <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-emerald-900">
-               <table className="w-full text-left border-collapse min-w-[600px]">
-                 <thead>
-                   <tr className="border-b border-emerald-900/50 text-[10px] uppercase text-emerald-600 tracking-widest">
-                     <th className="p-2 font-black">Nome Real</th>
-                     <th className="p-2 font-black">Usuário</th>
-                     <th className="p-2 font-black text-amber-500">Senha</th>
-                     <th className="p-2 font-black">Cargo</th>
-                     <th className="p-2 font-black">Status</th>
-                   </tr>
-                 </thead>
-                 <tbody className="text-xs">
-                   {allMembers.map(user => (
-                     <tr key={user.id} className="border-b border-emerald-900/20 hover:bg-emerald-950/20 transition-colors">
-                       <td className="p-2 text-emerald-200">{user.name}</td>
-                       <td className="p-2 font-bold text-emerald-400">@{user.username}</td>
-                       <td className="p-2 font-mono text-amber-400 font-bold">{user.password || 'N/A'}</td>
-                       <td className="p-2 text-zinc-400">{user.role}</td>
-                       <td className="p-2">
-                         {user.isBanned ? <span className="text-red-400 font-bold">BANIDO</span> : <span className="text-emerald-500">ATIVO</span>}
-                       </td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </div>
-           </div>
+      <div className="min-h-[100dvh] bg-black text-emerald-400 font-mono flex flex-col items-center sm:p-4 overflow-y-auto scrollbar-thin">
+        <div className="w-full max-w-6xl flex flex-col gap-4 p-4 border border-emerald-900/50 bg-zinc-950 sm:rounded-sm my-4">
+          
+          {/* Header */}
+          <header className="flex flex-wrap justify-between items-center pb-4 border-b border-emerald-900/50 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-950/60 border border-emerald-700/60 rounded">
+                <Server className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <h1 className="text-lg sm:text-xl font-black uppercase tracking-widest text-emerald-300 flex items-center gap-2">
+                  Dev Analytics & Monitoramento
+                  <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded font-normal">
+                    @Ssilva_7
+                  </span>
+                </h1>
+                <p className="text-[11px] text-zinc-400">
+                  Painel de controle em tempo real, base de dados e solicitações de recuperação
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => {
+                localStorage.removeItem('hud_devs_active_user');
+                setCurrentUser(null);
+                setView('login');
+              }}
+              className="px-4 py-2 bg-red-950/50 hover:bg-red-900/60 text-red-300 border border-red-800/80 rounded-sm font-bold text-xs flex items-center gap-2 transition-colors shadow-sm"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              ENCERRAR SESSÃO
+            </button>
+          </header>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-zinc-900/80 border border-emerald-900/50 p-3.5 rounded-sm">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1 tracking-wider">Total de Usuários</span>
+              <div className="text-2xl font-black text-emerald-300 flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-500" />
+                {allMembers.length}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-emerald-900/50 p-3.5 rounded-sm">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1 tracking-wider">Pessoas Online Agora</span>
+              <div className="text-2xl font-black text-emerald-400 flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                {onlineUsersCount}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-emerald-900/50 p-3.5 rounded-sm">
+              <span className="text-[10px] uppercase font-bold text-amber-500 block mb-1 tracking-wider">Recuperações Pendentes</span>
+              <div className="text-2xl font-black text-amber-400 flex items-center gap-2">
+                <KeyRound className="w-5 h-5 text-amber-500" />
+                {pendingRecoveryCount}
+              </div>
+            </div>
+
+            <div className="bg-zinc-900/80 border border-emerald-900/50 p-3.5 rounded-sm">
+              <span className="text-[10px] uppercase font-bold text-emerald-600 block mb-1 tracking-wider">Total Solicitações</span>
+              <div className="text-2xl font-black text-emerald-300 flex items-center gap-2">
+                <Mail className="w-5 h-5 text-emerald-500" />
+                {recoveryRequests.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="flex border-b border-emerald-900/50 gap-2 pt-2">
+            <button
+              onClick={() => setDevAnalyticsTab('users')}
+              className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-colors ${
+                devAnalyticsTab === 'users'
+                  ? 'border-emerald-500 text-emerald-300 bg-emerald-950/30'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Base de Dados de Clientes ({allMembers.length})
+            </button>
+
+            <button
+              onClick={() => setDevAnalyticsTab('recovery')}
+              className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2 border-b-2 transition-colors relative ${
+                devAnalyticsTab === 'recovery'
+                  ? 'border-amber-500 text-amber-300 bg-amber-950/20'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              Solicitações de Recuperação
+              {pendingRecoveryCount > 0 && (
+                <span className="bg-amber-600 text-black font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                  {pendingRecoveryCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Tab 1: Database of Users */}
+          {devAnalyticsTab === 'users' && (
+            <div className="bg-black/60 border border-emerald-900/30 p-4 rounded-sm shadow-inner flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-emerald-500" />
+                  <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+                    Lista de Clientes Cadastrados ({filteredUsers.length})
+                  </h2>
+                </div>
+
+                {/* User Search Input */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="w-3.5 h-3.5 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={devUserSearch}
+                    onChange={(e) => setDevUserSearch(e.target.value)}
+                    placeholder="Filtrar por nome, usuário, cargo..."
+                    className="w-full bg-zinc-900/80 border border-emerald-900/60 text-emerald-300 pl-9 pr-3 py-1.5 text-xs rounded focus:outline-none focus:border-emerald-500 font-mono"
+                  />
+                  {devUserSearch && (
+                    <button
+                      onClick={() => setDevUserSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-emerald-900 rounded border border-emerald-900/40">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-emerald-900/60 bg-zinc-900/90 text-[10px] uppercase text-emerald-500 tracking-widest">
+                      <th className="p-3 font-black">Nome Real</th>
+                      <th className="p-3 font-black">Usuário</th>
+                      <th className="p-3 font-black text-amber-400">Senha</th>
+                      <th className="p-3 font-black">Cargo</th>
+                      <th className="p-3 font-black">Atividade / Presença</th>
+                      <th className="p-3 font-black">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-xs divide-y divide-emerald-900/20">
+                    {filteredUsers.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-zinc-500 italic">
+                          Nenhum usuário localizado com o filtro aplicado.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredUsers.map(user => {
+                        let isOnline = false;
+                        let lastActiveLabel = 'Sem registro';
+                        if (user.lastActive) {
+                          try {
+                            const lastTime = user.lastActive?.toDate ? user.lastActive.toDate().getTime() : (typeof user.lastActive === 'number' ? user.lastActive : new Date(user.lastActive).getTime());
+                            if (!isNaN(lastTime)) {
+                              const diffMinutes = Math.floor((nowTick - lastTime) / 60000);
+                              if (diffMinutes < 3) {
+                                isOnline = true;
+                                lastActiveLabel = 'Online agora';
+                              } else if (diffMinutes < 60) {
+                                lastActiveLabel = `Visto há ${diffMinutes} min`;
+                              } else {
+                                const diffHours = Math.floor(diffMinutes / 60);
+                                lastActiveLabel = `Visto há ${diffHours}h`;
+                              }
+                            }
+                          } catch {}
+                        }
+
+                        return (
+                          <tr key={user.id || user.username} className="hover:bg-emerald-950/20 transition-colors">
+                            <td className="p-3 font-semibold text-emerald-200">{user.name}</td>
+                            <td className="p-3 font-bold text-emerald-400">@{user.username}</td>
+                            <td className="p-3 font-mono">
+                              <div className="inline-flex items-center gap-2 bg-amber-950/40 border border-amber-800/60 px-2.5 py-1 rounded text-amber-300 font-bold">
+                                <span>{user.password || 'N/A'}</span>
+                                {user.password && (
+                                  <button
+                                    type="button"
+                                    title="Copiar senha"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(user.password || '');
+                                      setCopiedPasswordId(user.id || user.username);
+                                      setTimeout(() => setCopiedPasswordId(null), 2000);
+                                    }}
+                                    className="text-amber-400/70 hover:text-amber-300"
+                                  >
+                                    {copiedPasswordId === (user.id || user.username) ? (
+                                      <Check className="w-3 h-3 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 text-zinc-400">{user.role || 'Membro'}</td>
+                            <td className="p-3">
+                              {isOnline ? (
+                                <span className="inline-flex items-center gap-1.5 text-emerald-400 font-bold text-[11px] bg-emerald-950/60 border border-emerald-800/80 px-2 py-0.5 rounded">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  ONLINE AGORA
+                                </span>
+                              ) : (
+                                <span className="text-[11px] text-zinc-500 font-mono flex items-center gap-1">
+                                  <Clock className="w-3 h-3" />
+                                  {lastActiveLabel}
+                                </span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {user.isBanned ? (
+                                <span className="text-red-400 font-bold text-[10px] bg-red-950/60 border border-red-800 px-2 py-0.5 rounded">
+                                  BANIDO
+                                </span>
+                              ) : (
+                                <span className="text-emerald-500 font-bold text-[10px] bg-emerald-950/40 border border-emerald-900/60 px-2 py-0.5 rounded">
+                                  ATIVO
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Password Recovery Requests */}
+          {devAnalyticsTab === 'recovery' && (
+            <div className="bg-black/60 border border-emerald-900/30 p-4 rounded-sm shadow-inner flex flex-col gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                    <KeyRound className="w-4 h-4 text-amber-500" />
+                    Solicitações de Recuperação de Senha
+                  </h2>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Utilize os botões de contato direto para enviar a nova senha por WhatsApp ou E-mail
+                  </p>
+                </div>
+
+                {/* Filter Buttons */}
+                <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded border border-emerald-900/50 text-xs">
+                  <button
+                    onClick={() => setDevRecFilter('all')}
+                    className={`px-3 py-1 rounded font-bold transition-colors ${
+                      devRecFilter === 'all' ? 'bg-emerald-800 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Todas ({recoveryRequests.length})
+                  </button>
+                  <button
+                    onClick={() => setDevRecFilter('pending')}
+                    className={`px-3 py-1 rounded font-bold transition-colors ${
+                      devRecFilter === 'pending' ? 'bg-amber-700 text-white' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Pendentes ({recoveryRequests.filter(r => r.status === 'pending').length})
+                  </button>
+                  <button
+                    onClick={() => setDevRecFilter('resolved')}
+                    className={`px-3 py-1 rounded font-bold transition-colors ${
+                      devRecFilter === 'resolved' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Atendidas ({recoveryRequests.filter(r => r.status === 'resolved').length})
+                  </button>
+                </div>
+              </div>
+
+              {filteredRequests.length === 0 ? (
+                <div className="p-8 text-center border border-emerald-900/30 rounded bg-zinc-900/40">
+                  <KeyRound className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                  <p className="text-zinc-400 text-sm font-semibold">Nenhuma solicitação de recuperação encontrada.</p>
+                  <p className="text-zinc-600 text-xs mt-1">Quando os usuários preencherem o formulário de recuperação, aparecerão aqui.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {filteredRequests.map(req => {
+                    const cleanPhone = (req.contact || '').replace(/\D/g, '');
+                    const waLink = cleanPhone ? `https://wa.me/${cleanPhone.length <= 11 ? '55' + cleanPhone : cleanPhone}?text=${encodeURIComponent(`Olá ${req.name}, recebemos sua solicitação de recuperação de senha no My Social para o usuário @${req.username}.`)}` : '#';
+                    const mailtoLink = req.email ? `mailto:${req.email}?subject=${encodeURIComponent('Recuperação de Senha - My Social')}&body=${encodeURIComponent(`Olá ${req.name},\n\nRecebemos sua solicitação de recuperação de senha para a conta @${req.username}.\n\n`)}` : '#';
+                    
+                    let dateStr = 'Data indisponível';
+                    if (req.createdAt) {
+                      try {
+                        const d = req.createdAt.toDate ? req.createdAt.toDate() : new Date(req.createdAt);
+                        dateStr = d.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+                      } catch {}
+                    }
+
+                    const isPending = req.status === 'pending';
+
+                    return (
+                      <div
+                        key={req.id}
+                        className={`p-4 rounded border flex flex-col justify-between gap-3 transition-all ${
+                          isPending
+                            ? 'bg-zinc-900/90 border-amber-800/80 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
+                            : 'bg-zinc-950/80 border-emerald-900/40 opacity-80'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                              <span className="text-xs text-zinc-500 font-mono block">Solicitante:</span>
+                              <h3 className="text-sm font-bold text-emerald-200">{req.name}</h3>
+                              <span className="text-xs font-mono text-emerald-400 font-bold">@{req.username}</span>
+                            </div>
+                            <div className="flex flex-col items-end gap-1">
+                              {isPending ? (
+                                <span className="bg-amber-950 text-amber-300 border border-amber-700/80 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                                  Pendente
+                                </span>
+                              ) : (
+                                <span className="bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-black px-2 py-0.5 rounded uppercase flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> Atendido
+                                </span>
+                              )}
+                              <span className="text-[10px] text-zinc-500 font-mono">{dateStr}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 text-xs bg-black/50 p-2.5 rounded border border-emerald-950 mb-3">
+                            <div className="flex items-center gap-2 text-zinc-300">
+                              <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span className="text-zinc-500">Contato:</span>
+                              <span className="font-mono text-emerald-300 font-semibold">{req.contact}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-zinc-300">
+                              <Mail className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span className="text-zinc-500">E-mail:</span>
+                              <span className="font-mono text-emerald-300 truncate">{req.email}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-950">
+                          {cleanPhone && (
+                            <a
+                              href={waLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 border border-emerald-700/80 rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-emerald-400" />
+                              WhatsApp
+                            </a>
+                          )}
+                          {req.email && (
+                            <a
+                              href={mailtoLink}
+                              className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded text-xs font-bold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Mail className="w-3.5 h-3.5 text-zinc-400" />
+                              E-mail
+                            </a>
+                          )}
+                          
+                          {req.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRecoveryStatus(req.id!, req.status)}
+                              className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition-colors ml-auto ${
+                                isPending
+                                  ? 'bg-amber-950/70 hover:bg-amber-900 text-amber-300 border border-amber-800'
+                                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-400 border border-zinc-800'
+                              }`}
+                            >
+                              {isPending ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5" /> Marcar Atendido
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3 h-3" /> Reabrir
+                                </>
+                              )}
+                            </button>
+                          )}
+
+                          {req.id && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRecoveryRequest(req.id!)}
+                              title="Excluir solicitação"
+                              className="p-1.5 bg-red-950/40 hover:bg-red-900 text-red-400 border border-red-900 rounded transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
     );
@@ -5641,7 +6253,7 @@ export default function App() {
                 <span className="text-[8px] text-emerald-600/80 font-bold uppercase tracking-widest">Status</span>
                 <span className="text-emerald-400 font-mono text-[10px] flex items-center gap-1 font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  ONLINE
+                  {onlineUsersCount} ONLINE
                 </span>
               </div>
             </div>

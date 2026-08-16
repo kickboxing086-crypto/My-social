@@ -89,6 +89,25 @@
         "update": "request.auth != null",
         "delete": "request.auth != null"
       }
+    },
+    {
+      "name": "password_recovery_requests",
+      "description": "Password recovery requests submitted by users for admin resolution",
+      "fields": {
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "contact": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "timestamp" },
+        "resolvedAt": { "type": "timestamp", "optional": true }
+      },
+      "rules": {
+        "read": "true",
+        "create": "true",
+        "update": "true",
+        "delete": "true"
+      }
     }
   ]
 }
