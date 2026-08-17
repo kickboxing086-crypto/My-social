@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
+import { APP_LOGO_BASE64 } from './assets/logo';
 import React from "react";
-import { Globe, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft, Settings } from 'lucide-react';
+import { Globe, ArrowDown, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft, Settings } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from './firebase';
 import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
@@ -5584,8 +5585,8 @@ My Social • Sua Sociedade Digital`;
           className="fixed top-4 right-4 z-50 max-w-sm w-full bg-zinc-950 border border-emerald-800/80 p-3.5 rounded shadow-[0_0_30px_rgba(16,185,129,0.3)] flex items-start gap-3 cursor-pointer"
           onClick={() => setPushToast(null)}
         >
-          <div className="p-2 bg-emerald-950 border border-emerald-700 rounded text-emerald-400 shrink-0">
-            <Bell className="w-4 h-4 animate-bounce" />
+          <div className="w-10 h-10 rounded-full border border-emerald-500/80 overflow-hidden shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.5)] bg-black p-0.5">
+            <img src={APP_LOGO_BASE64} alt="My social" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -5613,8 +5614,8 @@ My Social • Sua Sociedade Digital`;
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-20"></div>
           
           <div className="flex flex-col items-center mb-8 relative z-10">
-            <div className="bg-emerald-950/30 p-4 rounded-full border border-emerald-800/50 mb-4">
-              <Globe className="w-10 h-10 text-emerald-500" />
+            <div className="w-20 h-20 rounded-full border-2 border-emerald-500 p-1 shadow-[0_0_30px_rgba(16,185,129,0.4)] mb-4 overflow-hidden bg-black">
+              <img src={APP_LOGO_BASE64} alt="My social Globo Analítico" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
             </div>
             <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">My social</h1>
             <p className="text-emerald-700 text-xs mt-2 text-center tracking-widest">
@@ -6682,7 +6683,9 @@ My Social • Sua Sociedade Digital`;
             {/* Organized Group / Location Banner Display */}
             {!currentGroupId ? (
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded-sm">
-                <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                <div className="w-5 h-5 rounded-full border border-emerald-500 overflow-hidden shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)] bg-black">
+                  <img src={APP_LOGO_BASE64} alt="My social" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                </div>
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="font-extrabold text-[10px] sm:text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL - BRASIL 🇧🇷</span>
@@ -7521,6 +7524,15 @@ My Social • Sua Sociedade Digital`;
           ))}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Floating Arrow Button to scroll to the latest message at the bottom */}
+        <button
+          onClick={scrollToBottom}
+          className="fixed bottom-20 right-4 sm:right-8 z-40 bg-zinc-950/95 hover:bg-emerald-950 border-2 border-emerald-500 text-emerald-400 p-2.5 sm:p-3 rounded-full shadow-[0_0_20px_rgba(16,185,129,0.6)] transition-all hover:scale-110 active:scale-95 flex items-center justify-center group cursor-pointer"
+          title="Rolar para a mensagem mais recente (debaixo)"
+        >
+          <ArrowDown className="w-5 h-5 text-emerald-400 group-hover:text-emerald-200 animate-bounce" />
+        </button>
 
         {currentUser?.isBanned && (
           <div className="bg-amber-950/90 border-t border-b border-amber-800 p-2 sm:p-3 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs font-mono text-amber-200 z-20 shrink-0">
