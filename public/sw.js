@@ -1,11 +1,8 @@
-const CACHE_NAME = 'mysocial-v4';
+const CACHE_NAME = 'mysocial-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/icon.jpg',
-  '/icon.png',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/logo.png',
   '/manifest.json'
 ];
 
@@ -70,12 +67,12 @@ self.addEventListener('push', (event) => {
     }
   }
   const title = data.title || 'My social';
-  const iconUrl = self.location.origin + '/icon-192.png';
+  const iconUrl = self.location.origin + '/logo.png';
   const options = {
     body: data.body || data.text || 'Nova mensagem recebida',
     icon: iconUrl,
     badge: iconUrl,
-    image: self.location.origin + '/icon-512.png',
+    image: self.location.origin + '/logo.png',
     tag: data.tag || 'mysocial-notification',
     vibrate: [100, 50, 100],
     data: { url: '/' }

@@ -849,7 +849,7 @@ export default function App() {
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
             const title = `My social - @${latestMsg.sender}`;
-            const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
+            const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : '/logo.png';
             const options = {
               body: latestMsg.text || (latestMsg.attachment ? `Enviou um anexo: ${latestMsg.attachment.name}` : 'Enviou uma nova transmissão'),
               icon: notifIcon,
@@ -893,7 +893,7 @@ export default function App() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const title = 'My social - Nova Denúncia';
-              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
+              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : '/logo.png';
               const options = {
                 body: `@${newRep.reportedBy} denunciou @${newRep.reportedUser}: "${newRep.reason}"`,
                 icon: notifIcon,
@@ -933,7 +933,7 @@ export default function App() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const title = 'My social - Nova Sugestão';
-              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
+              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/logo.png` : '/logo.png';
               const options = {
                 body: `@${newSug.sender} enviou: "${newSug.text}"`,
                 icon: notifIcon,
