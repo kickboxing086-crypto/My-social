@@ -848,10 +848,12 @@ export default function App() {
         if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
           try {
             const title = `My social - @${latestMsg.sender}`;
+            const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
             const options = {
               body: latestMsg.text || (latestMsg.attachment ? `Enviou um anexo: ${latestMsg.attachment.name}` : 'Enviou uma nova transmissão'),
-              icon: '/icon-192.png',
-              badge: '/icon-192.png',
+              icon: notifIcon,
+              badge: notifIcon,
+              image: notifIcon,
               tag: 'new-message',
               vibrate: [100, 50, 100],
               data: { url: '/' }
@@ -890,10 +892,12 @@ export default function App() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const title = 'My social - Nova Denúncia';
+              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
               const options = {
                 body: `@${newRep.reportedBy} denunciou @${newRep.reportedUser}: "${newRep.reason}"`,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
+                icon: notifIcon,
+                badge: notifIcon,
+                image: notifIcon,
                 tag: 'report',
                 vibrate: [200, 100, 200],
                 data: { url: '/' }
@@ -928,10 +932,12 @@ export default function App() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
             try {
               const title = 'My social - Nova Sugestão';
+              const notifIcon = typeof window !== 'undefined' ? `${window.location.origin}/icon-192.png` : '/icon-192.png';
               const options = {
                 body: `@${newSug.sender} enviou: "${newSug.text}"`,
-                icon: '/icon-192.png',
-                badge: '/icon-192.png',
+                icon: notifIcon,
+                badge: notifIcon,
+                image: notifIcon,
                 tag: 'suggestion',
                 vibrate: [100, 50, 100],
                 data: { url: '/' }
@@ -5585,8 +5591,8 @@ My Social • Sua Sociedade Digital`;
           className="fixed top-4 right-4 z-50 max-w-sm w-full bg-zinc-950 border border-emerald-800/80 p-3.5 rounded shadow-[0_0_30px_rgba(16,185,129,0.3)] flex items-start gap-3 cursor-pointer"
           onClick={() => setPushToast(null)}
         >
-          <div className="w-10 h-10 rounded-full border border-emerald-500/80 overflow-hidden shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.5)] bg-black p-0.5">
-            <img src={APP_LOGO_BASE64} alt="My social" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+          <div className="p-2 bg-emerald-950 border border-emerald-700 rounded text-emerald-400 shrink-0">
+            <Bell className="w-4 h-4 animate-bounce" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2 mb-1">
@@ -5614,8 +5620,8 @@ My Social • Sua Sociedade Digital`;
           <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(transparent_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-20"></div>
           
           <div className="flex flex-col items-center mb-8 relative z-10">
-            <div className="w-20 h-20 rounded-full border-2 border-emerald-500 p-1 shadow-[0_0_30px_rgba(16,185,129,0.4)] mb-4 overflow-hidden bg-black">
-              <img src={APP_LOGO_BASE64} alt="My social Globo Analítico" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+            <div className="bg-emerald-950/30 p-4 rounded-full border border-emerald-800/50 mb-4">
+              <Globe className="w-10 h-10 text-emerald-500" />
             </div>
             <h1 className="text-3xl font-black text-emerald-400 tracking-widest text-center">My social</h1>
             <p className="text-emerald-700 text-xs mt-2 text-center tracking-widest">
@@ -6683,9 +6689,7 @@ My Social • Sua Sociedade Digital`;
             {/* Organized Group / Location Banner Display */}
             {!currentGroupId ? (
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/40 border border-emerald-900/60 px-2 py-1 rounded-sm">
-                <div className="w-5 h-5 rounded-full border border-emerald-500 overflow-hidden shrink-0 shadow-[0_0_8px_rgba(16,185,129,0.5)] bg-black">
-                  <img src={APP_LOGO_BASE64} alt="My social" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                </div>
+                <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
                 <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
                     <span className="font-extrabold text-[10px] sm:text-xs text-white tracking-wider uppercase truncate">CHAT GLOBAL - BRASIL 🇧🇷</span>

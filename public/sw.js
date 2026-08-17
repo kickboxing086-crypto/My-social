@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mysocial-v3';
+const CACHE_NAME = 'mysocial-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -59,6 +59,30 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// Push Event Handler
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { text: event.data.text() };
+    }
+  }
+  const title = data.title || 'My social';
+  const iconUrl = self.location.origin + '/icon-192.png';
+  const options = {
+    body: data.body || data.text || 'Nova mensagem recebida',
+    icon: iconUrl,
+    badge: iconUrl,
+    image: self.location.origin + '/icon-512.png',
+    tag: data.tag || 'mysocial-notification',
+    vibrate: [100, 50, 100],
+    data: { url: '/' }
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
 // Background Notification Click Event Handler
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
@@ -75,4 +99,5 @@ self.addEventListener('notificationclick', (event) => {
     })
   );
 });
+
 
