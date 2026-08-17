@@ -1,8 +1,10 @@
-const CACHE_NAME = 'mysocial-v5';
+const CACHE_NAME = 'mysocial-v6';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/logo.png',
+  '/icon-192.png',
+  '/favicon.ico',
   '/manifest.json'
 ];
 
