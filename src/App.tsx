@@ -3375,7 +3375,7 @@ My Social • Sua Sociedade Digital`;
               </p>
 
               {/* Email Content Box */}
-              <div className="flex-1 overflow-y-auto bg-black/90 border border-emerald-900/70 p-4 rounded text-zinc-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-800 selection:text-white select-all scrollbar-thin scrollbar-thumb-emerald-900">
+              <div className="flex-1 overflow-y-auto bg-black/90 border border-emerald-900/70 p-4 rounded text-zinc-300 font-mono text-xs leading-relaxed whitespace-pre-wrap selection:bg-emerald-800 selection:text-white select-text scrollbar-thin scrollbar-thumb-emerald-900">
                 {emailBody}
               </div>
 
@@ -7477,6 +7477,9 @@ My Social • Sua Sociedade Digital`;
                     {renderRoleBadge(msg.role, msg.sender)}
                     <span className="text-emerald-400 text-xs font-bold">
                       {msg.sender}
+                    </span>
+                    <span className="text-zinc-500 text-[10px] font-mono">
+                      {formatTimestamp(msg.timestamp)}
                     </span>
                   </div>
 
