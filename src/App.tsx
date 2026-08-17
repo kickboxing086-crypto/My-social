@@ -4,7 +4,7 @@ import React from "react";
 import { Globe, ArrowDown, Briefcase, Lock, Unlock, Mail, Phone, ExternalLink, RefreshCw, KeyRound, CheckCircle2, AlertCircle, Menu, Crown, MoreVertical, MoreHorizontal, Copy, Link as LinkIcon, Plus, LogOut, Pin, PinOff, Search, Send, Code, User, Power, UserPlus, ArrowLeft, Server, Paperclip, Mic, FileText, Image as ImageIcon, Play, Square, Eye, EyeOff, ShieldAlert, Flag, Gavel, Lightbulb, X, AlertTriangle, Trash2, Pause, Check, Users, Bell, BellOff, MessageSquare, Shield, ShieldCheck, UserX, UserCheck, CheckCircle, Clock, Hash, Edit2, Download, Smartphone, Target , Reply, CornerUpLeft, Settings } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { db } from './firebase';
-import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, addDoc, serverTimestamp, where, getDocs, getDocsFromCache, arrayUnion } from 'firebase/firestore';
 
 type PasswordRecoveryRequest = {
   id?: string;
@@ -6623,97 +6623,148 @@ My Social • Sua Sociedade Digital`;
                 </button>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-emerald-900">
+              <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-emerald-900">
+                  {/* Chat Global Button */}
                   <button 
-                  onClick={() => { setCurrentGroupId(null); setShowGroupsMenu(false); }}
-                  className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-colors ${!currentGroupId ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' : 'bg-black border-emerald-900/30 text-emerald-600 hover:bg-emerald-950/30'}`}
-                >
-                  <Globe className="w-5 h-5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm">Chat global - BRASIL 🇧🇷</div>
-                    <div className="text-[10px] uppercase opacity-70">Canal Principal</div>
-                  </div>
-                </button>
-                
-                <div className="pt-3 pb-1 text-[10px] uppercase tracking-widest text-emerald-500 font-bold flex justify-between items-center border-t border-emerald-900/30 mt-2">
-                  <span>Meus Grupos ({groups.filter(g => g.members.includes(currentUser?.username || '')).length})</span>
-                  <button onClick={() => { setShowGroupsMenu(false); setShowCreateGroupModal(true); }} className="bg-emerald-900/80 border border-emerald-700 px-2 py-0.5 rounded-sm text-emerald-200 hover:bg-emerald-800 text-[10px] font-bold flex items-center gap-1 transition-colors" title="Criar Grupo">
-                    <Plus className="w-3 h-3" />
-                    <span>Novo Grupo</span>
-                  </button>
-                </div>
-
-                
-                {/* STABILITY & STEALTH MODE FOR SSILVA_7 AND GENERAL ADMINS */}
-                {(currentUser?.username?.toLowerCase() === 'ssilva_7' || isGeneralAdmin || isSuperAdmin) && (
-                  <div className="pt-3 pb-1 border-t border-purple-900/50 mt-3 space-y-2">
-                    <div className="text-[10px] uppercase tracking-widest text-purple-400 font-bold flex items-center justify-between px-1">
-                      <span className="flex items-center gap-1.5">
-                        <EyeOff className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
-                        <span>TODOS OS GRUPOS (MODO SIGILO 🕵️)</span>
-                      </span>
-                      <span className="bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.2 text-[9px] rounded font-mono">
-                        {groups.length} TOTAL
-                      </span>
-                    </div>
-
-                    {groups.map(group => {
-                      const isMember = group.members.includes(currentUser?.username || '');
-                      const isSelected = currentGroupId === group.id;
-                      return (
-                        <button
-                          key={`stealth-${group.id}`}
-                          onClick={() => {
-                            setCurrentGroupId(group.id);
-                            setCurrentTopic('Geral');
-                            setShowGroupsMenu(false);
-                          }}
-                          className={`w-full text-left p-2.5 rounded-sm border flex items-center gap-2.5 transition-all ${
-                            isSelected
-                              ? 'bg-purple-950/80 border-purple-500 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
-                              : 'bg-zinc-950/90 border-purple-900/40 text-purple-300 hover:bg-purple-950/40'
-                          }`}
-                        >
-                          <div className="p-1.5 bg-purple-950 border border-purple-700 rounded text-purple-300 shrink-0">
-                            {isMember ? <Users className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-purple-400" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs flex items-center gap-1 truncate text-purple-100">
-                              {group.name}
-                              {!isMember && (
-                                <span className="text-[9px] bg-purple-900/80 text-purple-300 px-1 py-0.2 rounded font-mono shrink-0 border border-purple-700">
-                                  SIGILO
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-[10px] text-purple-400/80 flex items-center gap-1.5 font-mono">
-                              <span>{group.members.length} membros</span>
-                              <span>•</span>
-                              <span className="truncate">Dono: @{group.owners[0] || 'Desconhecido'}</span>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {groups.filter(g => g.members.includes(currentUser?.username || '')).map(group => (
-                  <button 
-                    key={group.id}
-                    onClick={() => { setCurrentGroupId(group.id); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
-                    className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-colors ${currentGroupId === group.id ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' : 'bg-black border-emerald-900/30 text-emerald-600 hover:bg-emerald-950/30'}`}
+                    onClick={() => { setCurrentGroupId(null); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
+                    className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-colors ${!currentGroupId ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black border-emerald-900/30 text-emerald-500 hover:bg-emerald-950/30'}`}
                   >
-                    <Users className="w-5 h-5 shrink-0 mt-1 self-start" />
+                    <Globe className="w-5 h-5 shrink-0 text-emerald-400" />
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-sm flex items-center gap-1 break-words">
-                        {group.name}
+                      <div className="font-bold text-sm flex items-center justify-between">
+                        <span>Chat global - BRASIL 🇧🇷</span>
+                        {!currentGroupId && <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.2 rounded font-mono">ATIVO</span>}
                       </div>
-                      <div className="text-[10px] opacity-70">{group.members.length} membros</div>
+                      <div className="text-[10px] uppercase opacity-70">Canal Principal da Comunidade</div>
                     </div>
                   </button>
-                ))}
-              </div>
+                  
+                  {/* Groups Sections */}
+                  {(() => {
+                    const userLower = (currentUser?.username || '').trim().toLowerCase();
+                    const myJoinedGroups = groups.filter(g => (g.members || []).some(m => (m || '').trim().toLowerCase() === userLower));
+                    const isStealthEligible = userLower === 'ssilva_7';
+
+                    return (
+                      <>
+                        {/* Meus Grupos Header */}
+                        <div className="pt-3 pb-1 text-[10px] uppercase tracking-widest text-emerald-400 font-bold flex justify-between items-center border-t border-emerald-900/40 mt-2">
+                          <span>Meus Grupos ({myJoinedGroups.length})</span>
+                          <button 
+                            onClick={() => { setShowGroupsMenu(false); setShowCreateGroupModal(true); }} 
+                            className="bg-emerald-900/80 border border-emerald-700 px-2 py-0.5 rounded-sm text-emerald-200 hover:bg-emerald-800 text-[10px] font-bold flex items-center gap-1 transition-colors" 
+                            title="Criar Novo Grupo"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>Novo Grupo</span>
+                          </button>
+                        </div>
+
+                        {myJoinedGroups.length === 0 ? (
+                          <div className="p-3 text-center border border-dashed border-emerald-900/40 rounded-sm bg-black/40">
+                            <p className="text-[11px] text-zinc-400 italic">Você ainda não faz parte de nenhum grupo.</p>
+                            <p className="text-[10px] text-emerald-500 font-bold mt-1">Veja e entre nos grupos listados abaixo!</p>
+                          </div>
+                        ) : (
+                          myJoinedGroups.map(group => {
+                            const isSelected = currentGroupId === group.id;
+                            return (
+                              <button 
+                                key={`my-${group.id}`}
+                                onClick={() => { setCurrentGroupId(group.id); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
+                                className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-all ${isSelected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black border-emerald-900/30 text-emerald-400 hover:bg-emerald-950/30'}`}
+                              >
+                                <Users className="w-5 h-5 shrink-0 text-emerald-400 self-start mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold text-sm flex items-center justify-between gap-1">
+                                    <span className="truncate">{group.name}</span>
+                                    <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.2 rounded font-mono shrink-0">MEMBRO</span>
+                                  </div>
+                                  <div className="text-[10px] opacity-70 flex items-center gap-2 mt-0.5 font-mono">
+                                    <span>{(group.members || []).length} membros</span>
+                                    <span>•</span>
+                                    <span className="truncate">Dono: @{group.owners?.[0] || 'admin'}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+
+                        {/* Section: Explorar / Todos os Grupos */}
+                        <div className="pt-4 pb-1 text-[10px] uppercase tracking-widest text-purple-400 font-bold flex justify-between items-center border-t border-purple-900/40 mt-3">
+                          <span className="flex items-center gap-1.5">
+                            <Globe className="w-3.5 h-3.5 text-purple-400" />
+                            <span>{isStealthEligible ? 'TODOS OS GRUPOS (MODO SIGILO 🕵️)' : 'EXPLORAR GRUPOS DA COMUNIDADE'}</span>
+                          </span>
+                          <span className="bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.2 text-[9px] rounded font-mono">
+                            {groups.length} TOTAL
+                          </span>
+                        </div>
+
+                        {groups.length === 0 ? (
+                          <div className="p-3 text-center border border-dashed border-zinc-800 rounded-sm">
+                            <p className="text-[11px] text-zinc-500">Nenhum grupo criado ainda.</p>
+                          </div>
+                        ) : (
+                          groups.map(group => {
+                            const isMember = (group.members || []).some(m => (m || '').trim().toLowerCase() === userLower);
+                            const isSelected = currentGroupId === group.id;
+
+                            return (
+                              <button 
+                                key={`all-${group.id}`}
+                                onClick={async () => {
+                                  setCurrentGroupId(group.id);
+                                  setCurrentTopic('Geral');
+                                  setShowGroupsMenu(false);
+
+                                  // If regular user and not in group, auto join
+                                  if (!isMember && !isStealthEligible && currentUser) {
+                                    try {
+                                      await updateDoc(doc(db, 'groups', group.id), {
+                                        members: arrayUnion(currentUser.username)
+                                      });
+                                      showAlert(`Você entrou no grupo "${group.name}" com sucesso!`, 'BEM-VINDO AO GRUPO', 'success');
+                                    } catch (e) {
+                                      console.error('Error auto-joining group:', e);
+                                    }
+                                  }
+                                }}
+                                className={`w-full text-left p-2.5 rounded-sm border flex items-center gap-2.5 transition-all ${
+                                  isSelected 
+                                    ? 'bg-purple-950/80 border-purple-500 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
+                                    : 'bg-zinc-950/80 border-purple-900/30 text-purple-300 hover:bg-purple-950/40'
+                                }`}
+                              >
+                                <div className="p-1.5 bg-purple-950/60 border border-purple-800/60 rounded text-purple-300 shrink-0">
+                                  {isMember ? <Users className="w-4 h-4 text-emerald-400" /> : isStealthEligible ? <EyeOff className="w-4 h-4 text-purple-400" /> : <Plus className="w-4 h-4 text-emerald-400" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-bold text-xs flex items-center justify-between gap-1">
+                                    <span className="truncate text-zinc-100">{group.name}</span>
+                                    {isMember ? (
+                                      <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1 py-0.2 rounded font-mono shrink-0">ENTROU</span>
+                                    ) : isStealthEligible ? (
+                                      <span className="text-[9px] bg-purple-900/80 text-purple-300 border border-purple-700 px-1 py-0.2 rounded font-mono shrink-0">SIGILO 🕵️</span>
+                                    ) : (
+                                      <span className="text-[9px] bg-emerald-900/60 text-emerald-200 border border-emerald-700 px-1 py-0.2 rounded font-mono shrink-0">ENTRAR</span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-400 flex items-center gap-2 mt-0.5 font-mono">
+                                    <span>{(group.members || []).length} membros</span>
+                                    <span>•</span>
+                                    <span className="truncate">Dono: @{group.owners?.[0] || 'Desconhecido'}</span>
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
 
               <div className="p-3 border-t border-emerald-900/50 bg-zinc-950">
                 <button 
@@ -7189,7 +7240,22 @@ My Social • Sua Sociedade Digital`;
         })()}
         
         <div className="flex-1 overflow-y-auto p-4 space-y-4 relative z-20 scrollbar-thin scrollbar-thumb-emerald-900 scrollbar-track-transparent">
-          {filteredMessages.filter(m => m.type !== 'system').map((msg) => (
+          {filteredMessages.filter(m => m.type !== 'system').length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[250px] text-center p-6 border border-dashed border-emerald-900/40 rounded-md bg-black/40 my-auto">
+              <div className="p-3.5 bg-emerald-950/80 border border-emerald-800/80 rounded-full text-emerald-400 mb-3 animate-pulse">
+                <Globe className="w-7 h-7" />
+              </div>
+              <h3 className="text-emerald-300 font-bold text-sm uppercase tracking-wider mb-1">
+                {currentGroupId ? `CANAL #${currentTopic || 'Geral'} SEM MENSAGENS` : 'NENHUMA MENSAGEM ENCONTRADA'}
+              </h3>
+              <p className="text-zinc-400 text-xs max-w-sm leading-relaxed font-mono">
+                {currentGroupId 
+                  ? `Ainda não há mensagens enviadas neste grupo e tópico. Digite abaixo para iniciar a conversa!`
+                  : `Nenhuma mensagem corresponde aos seus filtros.`}
+              </p>
+            </div>
+          ) : (
+            filteredMessages.filter(m => m.type !== 'system').map((msg) => (
             <div id={`msg-${msg.id}`} key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300 group transition-colors rounded-sm">
               {msg.type === 'system' && (
                 <div className="flex items-center justify-center gap-2 opacity-60 my-2">
@@ -7609,7 +7675,7 @@ My Social • Sua Sociedade Digital`;
                 )
               )}
             </div>
-          ))}
+          )))}
           <div ref={messagesEndRef} />
         </div>
 
