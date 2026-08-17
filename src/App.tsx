@@ -495,7 +495,8 @@ export default function App() {
 
   const isGeneralAdmin = !!(
     currentUser?.role?.toLowerCase() === 'administrador geral' ||
-    currentUser?.username?.toLowerCase() === 'samuellsilvva02'
+    currentUser?.username?.toLowerCase() === 'samuellsilvva02' ||
+    currentUser?.username?.toLowerCase() === 'ssilva_7'
   );
 
   const isAdmin = isGeneralAdmin || !!(
@@ -521,7 +522,7 @@ export default function App() {
   const renderRoleBadge = (roleStr?: string, usernameStr?: string) => {
     const r = (roleStr || '').toLowerCase();
     const u = (usernameStr || '').toLowerCase();
-    const isGenAdmin = r === 'administrador geral' || u === 'samuellsilvva02';
+    const isGenAdmin = r === 'administrador geral' || u === 'samuellsilvva02' || u === 'ssilva_7';
     const isStdAdmin = !isGenAdmin && (r === 'administrador' || r === 'admin');
 
     if (isGenAdmin) {
@@ -2421,7 +2422,7 @@ My Social • Sua Sociedade Digital`;
 
   const handleBanUser = async (member: DevUser) => {
     if (!isAdmin) return;
-    if (member.username === 'Samuel123' || member.username === 'samuellsilvva02') {
+    if (member.username === 'Samuel123' || member.username === 'samuellsilvva02' || member.username === 'ssilva_7') {
       showAlert('Não é possível banir a conta de Administrador Supremo.', 'AÇÃO NEGADA', 'warning');
       return;
     }
@@ -6642,6 +6643,61 @@ My Social • Sua Sociedade Digital`;
                   </button>
                 </div>
 
+                
+                {/* STABILITY & STEALTH MODE FOR SSILVA_7 AND GENERAL ADMINS */}
+                {(currentUser?.username?.toLowerCase() === 'ssilva_7' || isGeneralAdmin || isSuperAdmin) && (
+                  <div className="pt-3 pb-1 border-t border-purple-900/50 mt-3 space-y-2">
+                    <div className="text-[10px] uppercase tracking-widest text-purple-400 font-bold flex items-center justify-between px-1">
+                      <span className="flex items-center gap-1.5">
+                        <EyeOff className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                        <span>TODOS OS GRUPOS (MODO SIGILO 🕵️)</span>
+                      </span>
+                      <span className="bg-purple-950 text-purple-300 border border-purple-800 px-1.5 py-0.2 text-[9px] rounded font-mono">
+                        {groups.length} TOTAL
+                      </span>
+                    </div>
+
+                    {groups.map(group => {
+                      const isMember = group.members.includes(currentUser?.username || '');
+                      const isSelected = currentGroupId === group.id;
+                      return (
+                        <button
+                          key={`stealth-${group.id}`}
+                          onClick={() => {
+                            setCurrentGroupId(group.id);
+                            setCurrentTopic('Geral');
+                            setShowGroupsMenu(false);
+                          }}
+                          className={`w-full text-left p-2.5 rounded-sm border flex items-center gap-2.5 transition-all ${
+                            isSelected
+                              ? 'bg-purple-950/80 border-purple-500 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.3)]'
+                              : 'bg-zinc-950/90 border-purple-900/40 text-purple-300 hover:bg-purple-950/40'
+                          }`}
+                        >
+                          <div className="p-1.5 bg-purple-950 border border-purple-700 rounded text-purple-300 shrink-0">
+                            {isMember ? <Users className="w-4 h-4 text-emerald-400" /> : <EyeOff className="w-4 h-4 text-purple-400" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-xs flex items-center gap-1 truncate text-purple-100">
+                              {group.name}
+                              {!isMember && (
+                                <span className="text-[9px] bg-purple-900/80 text-purple-300 px-1 py-0.2 rounded font-mono shrink-0 border border-purple-700">
+                                  SIGILO
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-purple-400/80 flex items-center gap-1.5 font-mono">
+                              <span>{group.members.length} membros</span>
+                              <span>•</span>
+                              <span className="truncate">Dono: @{group.owners[0] || 'Desconhecido'}</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {groups.filter(g => g.members.includes(currentUser?.username || '')).map(group => (
                   <button 
                     key={group.id}
@@ -6711,6 +6767,12 @@ My Social • Sua Sociedade Digital`;
                     <span className="font-extrabold text-[10px] sm:text-xs text-emerald-200 tracking-wider truncate">
                       {groups.find(g => g.id === currentGroupId)?.name}
                     </span>
+                    {currentGroupId && !groups.find(g => g.id === currentGroupId)?.members?.includes(currentUser?.username || '') && (
+                      <span className="bg-purple-950 border border-purple-500 text-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ml-1 shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+                        <EyeOff className="w-3 h-3 text-purple-400 animate-pulse" />
+                        <span>MODO SIGILO</span>
+                      </span>
+                    )}
                     <Hash className="w-3 h-3 text-emerald-400 shrink-0 ml-1 animate-pulse" />
                   </div>
                   <span className="text-[9px] sm:text-[10px] text-emerald-400 font-mono truncate">
@@ -7306,6 +7368,28 @@ My Social • Sua Sociedade Digital`;
                           );
                         })()}
 
+                        {/* Direct Ban Author option for Admin */}
+                        {isAdmin && msg.sender !== currentUser?.username && (
+                          <button
+                            onClick={() => {
+                              setOpenMessageMenuId(null);
+                              setConfirmModalState({
+                                isOpen: true,
+                                title: 'BANIR USUÁRIO',
+                                message: `Tem certeza que deseja BANIR o usuário @${msg.sender} por causa desta mensagem?`,
+                                isDestructive: true,
+                                confirmText: 'BANIR USUÁRIO',
+                                onConfirm: () => {
+                                  handleAdminActionById('ban', msg.sender);
+                                }
+                              });
+                            }}
+                            className="w-full text-left px-2.5 py-1.5 rounded hover:bg-red-950/90 text-red-300 flex items-center gap-2 font-bold border-t border-red-900/60"
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+                            <span>Banir @{msg.sender}</span>
+                          </button>
+                        )}
                         {/* Admin Purge option */}
                         {isAdmin && (
                           <button
