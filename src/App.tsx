@@ -362,6 +362,7 @@ export default function App() {
   const [editTopicValue, setEditTopicValue] = useState<string>('');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
+  const [showPWAInstallModal, setShowPWAInstallModal] = useState<boolean>(false);
   const [stagedAttachment, setStagedAttachment] = useState<{
     name: string;
     fileType: 'image' | 'document';
@@ -5699,6 +5700,127 @@ https://mysocial.app | no-reply.mysocial@gmail.com`;
     </AnimatePresence>
   );
 
+  const renderPWAInstallModal = () => (
+    <AnimatePresence>
+      {showPWAInstallModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 font-mono text-xs"
+          onClick={() => setShowPWAInstallModal(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 15 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-zinc-950 border border-emerald-800 p-5 sm:p-6 max-w-md w-full relative shadow-[0_0_50px_rgba(16,185,129,0.25)] rounded-md flex flex-col gap-4 max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-emerald-900"
+          >
+            <div className="flex justify-between items-center pb-3 border-b border-emerald-900/60">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+                <Smartphone className="w-5 h-5 text-emerald-400 animate-pulse" />
+                <span>INSTALAR APLICATIVO OFICIAL</span>
+              </div>
+              <button 
+                onClick={() => setShowPWAInstallModal(false)} 
+                className="text-zinc-500 hover:text-emerald-400 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* App Card Display */}
+            <div className="flex items-center gap-3.5 bg-black/80 p-3.5 rounded border border-emerald-900/70">
+              <img 
+                src={APP_LOGO_BASE64} 
+                alt="My social Logo" 
+                className="w-14 h-14 rounded-xl border border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)] object-cover shrink-0" 
+              />
+              <div className="flex-1 min-w-0">
+                <h3 className="font-bold text-sm text-white truncate">My social</h3>
+                <p className="text-[11px] text-emerald-400 font-mono">Sua Sociedade Digital • PWA Nativo</p>
+                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 bg-emerald-950/80 px-1.5 py-0.2 rounded border border-emerald-800/80 mt-1">
+                  <CheckCircle className="w-3 h-3 text-emerald-400" /> Instalável em Android & iOS
+                </span>
+              </div>
+            </div>
+
+            {/* Automatic Install Trigger if supported by browser */}
+            {deferredPrompt && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPWAInstallModal(false);
+                  handleInstallPWA();
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-black font-black tracking-wider text-xs rounded uppercase flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.5)] transition-all cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>INSTALAR AGORA NO DISPOSITIVO</span>
+              </button>
+            )}
+
+            {/* Step-by-step Guide */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-amber-400" /> Como instalar no seu aparelho:
+              </h4>
+
+              {/* Android Box */}
+              <div className="bg-zinc-900/90 border border-emerald-900/50 p-3 rounded space-y-2 text-[11px] text-zinc-300">
+                <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> No Android (Google Chrome):
+                </div>
+                <ol className="list-decimal list-inside space-y-1.5 pl-1 text-zinc-400">
+                  <li>Toque no menu de <strong className="text-zinc-200">3 pontinhos (⋮)</strong> no canto superior direito do Chrome.</li>
+                  <li>Toque na opção <strong className="text-emerald-300">"Instalar aplicativo"</strong> ou <strong className="text-emerald-300">"Adicionar à tela inicial"</strong>.</li>
+                  <li>Confirme em <strong className="text-zinc-200">"Instalar"</strong>. O ícone oficial aparecerá na tela do seu celular!</li>
+                </ol>
+              </div>
+
+              {/* iPhone iOS Box */}
+              <div className="bg-zinc-900/90 border border-emerald-900/50 p-3 rounded space-y-2 text-[11px] text-zinc-300">
+                <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <ExternalLink className="w-3.5 h-3.5 text-emerald-400" /> No iPhone / iPad (Safari):
+                </div>
+                <ol className="list-decimal list-inside space-y-1.5 pl-1 text-zinc-400">
+                  <li>Toque no botão de <strong className="text-zinc-200">Compartilhar</strong> (ícone de quadrado com seta para cima).</li>
+                  <li>Role a lista e toque em <strong className="text-emerald-300">"Adicionar à Tela de Início"</strong>.</li>
+                  <li>Toque em <strong className="text-zinc-200">"Adicionar"</strong> no canto superior direito.</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* Direct Link button */}
+            <div className="pt-2 border-t border-emerald-900/40 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.origin);
+                  showAlert('Link oficial do aplicativo copiado! Abra no navegador Chrome ou Safari para instalar.', 'LINK COPIADO', 'success');
+                }}
+                className="px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-emerald-400 border border-emerald-900 rounded text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+              >
+                <Copy className="w-3.5 h-3.5" />
+                <span>Copiar Link do App</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPWAInstallModal(false)}
+                className="px-4 py-2 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 rounded text-[11px] font-bold transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
 // --- VIEWS ---
   if (view === 'login' || view === 'register' || view === 'recover_password') {
     return (
@@ -6247,7 +6369,8 @@ https://mysocial.app | no-reply.mysocial@gmail.com`;
         {renderRemoveFromGroupModal()}
         {renderItemDeleteConfirmModal()}
         {renderGroupTopicsModal()}
-      {renderEmailTemplateModal()}
+        {renderEmailTemplateModal()}
+        {renderPWAInstallModal()}
       </div>
     );
   }    if (view === 'dev_analytics') {
@@ -7300,15 +7423,16 @@ https://mysocial.app | no-reply.mysocial@gmail.com`;
 
                     {/* PWA Installation Option */}
                     <button
+                      type="button"
                       onClick={() => {
                         setShowHeaderAdminMenu(false);
                         if (deferredPrompt) {
                           handleInstallPWA();
                         } else {
-                          showAlert('No iOS/Safari: Toque no botão "Compartilhar" (ícone de quadrado com seta para cima) e escolha "Adicionar à Tela de Início". No Android/Chrome: Toque no menu do navegador e escolha "Instalar aplicativo" ou "Instalar app".', 'TRANSFORMAR EM APP', 'info');
+                          setShowPWAInstallModal(true);
                         }
                       }}
-                      className="w-full text-left px-2.5 py-2 rounded hover:bg-emerald-950/60 text-emerald-400 transition-colors flex items-center justify-between font-bold border-t border-emerald-900/40 mt-1"
+                      className="w-full text-left px-2.5 py-2 rounded hover:bg-emerald-950/60 text-emerald-400 transition-colors flex items-center justify-between font-bold border-t border-emerald-900/40 mt-1 cursor-pointer"
                     >
                       <div className="flex items-center gap-2">
                         <Smartphone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
@@ -8221,6 +8345,7 @@ https://mysocial.app | no-reply.mysocial@gmail.com`;
       {renderDeleteGroupModal()}
       {renderGroupTopicsModal()}
       {renderLightboxModal()}
+      {renderPWAInstallModal()}
     </div>
   );
 }
