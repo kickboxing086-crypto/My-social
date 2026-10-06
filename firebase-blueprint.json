@@ -8,6 +8,7 @@
         "name": { "type": "string", "description": "Real name" },
         "username": { "type": "string", "description": "Username" },
         "role": { "type": "string", "description": "Job role" },
+        "email": { "type": "string", "description": "Account recovery and notification email", "optional": true },
         "isBanned": { "type": "boolean", "description": "Flag for banned users", "optional": true },
         "bannedAt": { "type": "timestamp", "description": "Timestamp when user was banned", "optional": true },
         "banReason": { "type": "string", "description": "Reason why the user was banned", "optional": true }

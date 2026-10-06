@@ -24,6 +24,8 @@ type DevUser = {
   name: string;
   username: string;
   role: string;
+  email?: string;
+  phone?: string;
   password?: string;
   isBanned?: boolean;
   lastActive?: any;
@@ -399,6 +401,7 @@ export default function App() {
   
   const [regName, setRegName] = useState('');
   const [regUsername, setRegUsername] = useState('');
+  const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [recName, setRecName] = useState('');
   const [recUsername, setRecUsername] = useState('');
@@ -1085,8 +1088,52 @@ export default function App() {
   };
 
 
+  const handleLeaveGroup = async (groupIdToLeave: string) => {
+    const grp = groups.find(g => g.id === groupIdToLeave);
+    if (!grp || !currentUser) return;
+    const userLower = (currentUser.username || '').trim().toLowerCase();
+    const newMembers = (grp.members || []).filter(m => (m || '').trim().toLowerCase() !== userLower);
+    const newOwners = (grp.owners || []).filter(o => (o || '').trim().toLowerCase() !== userLower);
+    
+    try {
+      await updateDoc(doc(db, 'groups', grp.id), {
+        members: newMembers,
+        owners: newOwners
+      });
+      
+      // Update local state immediately
+      setGroups(prev => prev.map(g => g.id === grp.id ? { ...g, members: newMembers, owners: newOwners } : g));
+      
+      if (currentGroupId === grp.id) {
+        setCurrentGroupId(null);
+        setCurrentTopic('Geral');
+      }
+      setShowGroupsMenu(false);
+      setShowGroupTopicsModal(false);
+      setShowMembersModal(false);
+      setGroupSettingsTarget(null);
+      
+      showAlert(`Você saiu do grupo "${grp.name}".`, 'SAÍDA DE GRUPO', 'info');
+    } catch (err) {
+      console.error('Error leaving group:', err);
+      showAlert('Erro ao processar saída do grupo.', 'ERRO', 'error');
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!regEmail.trim()) {
+      showAlert('Por favor, informe seu e-mail de recuperação para continuar.', 'E-MAIL OBRIGATÓRIO', 'warning');
+      return;
+    }
+    
+    const cleanEmail = regEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      showAlert('Por favor, insira um endereço de e-mail válido.', 'E-MAIL INVÁLIDO', 'warning');
+      return;
+    }
+
     if (regPassword.length > 6) {
       showAlert('A senha deve ter no máximo 6 dígitos.', 'VALIDAÇÃO DE SENHA', 'warning');
       return;
@@ -1122,8 +1169,9 @@ export default function App() {
       };
       
       const newUser: DevUser = {
-        name: regName,
+        name: regName.trim(),
         username: cleanUsername,
+        email: cleanEmail,
         role: regRole.trim() || 'Membro',
         password: regPassword,
         shortId: generateShortId(),
@@ -1205,29 +1253,37 @@ export default function App() {
 
   const generateProfessionalEmailText = (user: { name: string; username: string; password?: string; role?: string; email?: string }) => {
     const loginUrl = window.location.origin;
-    return `Assunto: Suas Credenciais de Acesso à Plataforma - My Social
+    return `De: My Social Sistema Oficial <no-reply.mysocial@gmail.com>
+Para: ${user.email || 'Destinatário'}
+Assunto: [NO-REPLY] Suas Credenciais de Acesso à Plataforma - My Social
+
+============================================================
+           MY SOCIAL • SISTEMA DE GESTÃO DE ACESSOS
+                   MENSAGEM AUTOMÁTICA (NO-REPLY)
+============================================================
 
 Prezado(a) ${user.name || user.username},
 
-Seja bem-vindo(a) à plataforma My Social!
-Seu acesso oficial foi configurado com sucesso e suas credenciais já estão disponíveis para utilização imediata.
+Seu cadastro oficial no My Social está ativo. Seguem abaixo as suas credenciais de acesso seguro:
 
 📌 DADOS DE ACESSO AO SISTEMA:
 • Nome Completo: ${user.name || 'Usuário'}
 • Nome de Usuário (Login): @${user.username}
+• E-mail Cadastrado: ${user.email || 'Não informado'}
 • Senha de Acesso: ${user.password || '******'}
 • Cargo / Nível de Acesso: ${user.role || 'Membro'}
 • Link Direto da Plataforma: ${loginUrl}
 
-🔐 RECOMENDAÇÕES IMPORTANTES DE SEGURANÇA:
-1. Este é um envio oficial e exclusivo de credenciais.
-2. Recomendamos guardar suas informações em local seguro e não compartilhá-las com terceiros.
-3. Você pode se conectar a qualquer momento acessando o link informado e inserindo seu usuário e senha.
-4. Caso necessite de alteração de dados, dúvidas ou suporte técnico, entre em contato com nossa equipe administrativa.
+🔐 INFORMAÇÕES DE SEGURANÇA E RECUPERAÇÃO:
+1. Esta é uma mensagem gerada automaticamente pelo serviço no-reply (não responda a este e-mail).
+2. Guarde suas credenciais em segurança e não compartilhe sua senha com terceiros.
+3. Se você não solicitou estas credenciais ou a recuperação de conta, desconsidere este aviso.
+4. Para acessar a plataforma, utilize o link acima e insira seu @usuário e senha de 6 dígitos.
 
 Atenciosamente,
-Equipe de Administração & Segurança
-My Social • Sua Sociedade Digital`;
+Central de Segurança & Suporte No-Reply
+My Social • Sua Sociedade Digital
+https://mysocial.app | no-reply.mysocial@gmail.com`;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -3671,6 +3727,41 @@ My Social • Sua Sociedade Digital`;
                   </div>
                 </div>
               )}
+
+              {/* Footer Actions: Exit View / Leave Group */}
+              <div className="pt-3 mt-3 border-t border-emerald-900/40 shrink-0 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentGroupId(null);
+                    setCurrentTopic('Geral');
+                    setShowGroupTopicsModal(false);
+                  }}
+                  className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-emerald-400 border border-emerald-900/60 rounded text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  <span>Ir para Chat Global</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGroupTopicsModal(false);
+                    setConfirmModalState({
+                      isOpen: true,
+                      title: 'SAIR DO GRUPO',
+                      message: `Tem certeza que deseja sair do grupo "${group.name}" e voltar ao Chat Global?`,
+                      isDestructive: true,
+                      confirmText: 'SAIR DO GRUPO',
+                      onConfirm: () => handleLeaveGroup(group.id)
+                    });
+                  }}
+                  className="px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-xs font-bold flex items-center gap-1.5 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sair do Grupo</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
@@ -4425,26 +4516,21 @@ My Social • Sua Sociedade Digital`;
                 )}
 
                 <button
-                  onClick={async () => {
+                  type="button"
+                  onClick={() => {
                     setConfirmModalState({
-    isOpen: true,
-    title: 'SAIR DO GRUPO',
-    message: 'Tem certeza que deseja sair deste grupo?',
-    isDestructive: true,
-    confirmText: 'SAIR DO GRUPO',
-    onConfirm: async () => {
-      const newMembers = groupSettingsTarget.members.filter(m => m !== currentUser?.username);
-      await updateDoc(doc(db, 'groups', groupSettingsTarget.id), { members: newMembers });
-      setGroupSettingsTarget(null);
-      setCurrentGroupId(null);
-      setShowGroupsMenu(false);
-      showAlert('Você saiu do grupo.', 'SUCESSO', 'info');
-    }
-  });
+                      isOpen: true,
+                      title: 'SAIR DO GRUPO',
+                      message: `Tem certeza que deseja sair do grupo "${groupSettingsTarget.name}"?`,
+                      isDestructive: true,
+                      confirmText: 'SAIR DO GRUPO',
+                      onConfirm: () => handleLeaveGroup(groupSettingsTarget.id)
+                    });
                   }}
-                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-zinc-800 p-2.5 text-xs font-bold rounded transition-colors uppercase tracking-wider"
+                  className="w-full bg-zinc-900 border border-zinc-800 text-zinc-300 hover:bg-amber-950 hover:text-amber-300 hover:border-amber-800 p-2.5 text-xs font-bold rounded transition-colors uppercase tracking-wider flex items-center justify-center gap-2"
                 >
-                  SAIR DO GRUPO
+                  <LogOut className="w-3.5 h-3.5 text-amber-400" />
+                  <span>SAIR DO GRUPO</span>
                 </button>
               </div>
             </motion.div>
@@ -5708,6 +5794,27 @@ My Social • Sua Sociedade Digital`;
                 />
               </div>
               <div>
+                <label className="block text-emerald-400 text-xs mb-1 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>E-MAIL DE RECUPERAÇÃO (SISTEMA NO-REPLY)</span>
+                </label>
+                <p className="text-[11px] text-zinc-400 mb-1.5 font-mono">
+                  Obrigatório para envio de credenciais e recuperação segura de conta:
+                </p>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-emerald-700 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    required
+                    value={regEmail}
+                    onChange={(e) => setRegEmail(e.target.value)}
+                    placeholder="seuemail@exemplo.com"
+                    className="w-full bg-zinc-900/50 border border-emerald-900/50 text-emerald-300 pl-10 pr-4 py-2 text-xs focus:outline-none focus:border-emerald-500 transition-colors rounded-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="block text-emerald-400 text-xs mb-1 font-bold uppercase tracking-wider">
                   CARGO / FUNÇÃO (OPCIONAL)
                 </label>
@@ -6302,6 +6409,7 @@ My Social • Sua Sociedade Digital`;
                       <th className="p-3 font-black">Nome Real</th>
                       <th className="p-3 font-black">Usuário</th>
                       <th className="p-3 font-black text-amber-400">Senha</th>
+                      <th className="p-3 font-black text-cyan-400">E-mail No-Reply</th>
                       <th className="p-3 font-black">Cargo</th>
                       <th className="p-3 font-black">Atividade / Presença</th>
                       <th className="p-3 font-black">Status</th>
@@ -6310,7 +6418,7 @@ My Social • Sua Sociedade Digital`;
                   <tbody className="text-xs divide-y divide-emerald-900/20">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-6 text-center text-zinc-500 italic">
+                        <td colSpan={7} className="p-6 text-center text-zinc-500 italic">
                           Nenhum usuário localizado com o filtro aplicado.
                         </td>
                       </tr>
@@ -6362,6 +6470,16 @@ My Social • Sua Sociedade Digital`;
                                   </button>
                                 )}
                               </div>
+                            </td>
+                            <td className="p-3 text-cyan-300 font-mono text-xs">
+                              {user.email ? (
+                                <div className="flex items-center gap-1.5">
+                                  <Mail className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                  <span className="truncate max-w-[200px]">{user.email}</span>
+                                </div>
+                              ) : (
+                                <span className="text-zinc-600 italic">Não informado</span>
+                              )}
                             </td>
                             <td className="p-3 text-zinc-400">{user.role || 'Membro'}</td>
                             <td className="p-3">
@@ -6471,8 +6589,10 @@ My Social • Sua Sociedade Digital`;
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                   {filteredRequests.map(req => {
                     const cleanPhone = (req.contact || '').replace(/\D/g, '');
+                    const matchedUser = allMembers.find(u => (u.username || '').toLowerCase() === (req.username || '').toLowerCase());
+                    const emailMatches = matchedUser?.email && req.email && matchedUser.email.toLowerCase() === req.email.toLowerCase();
                     const waLink = cleanPhone ? `https://wa.me/${cleanPhone.length <= 11 ? '55' + cleanPhone : cleanPhone}?text=${encodeURIComponent(`Olá ${req.name}, recebemos sua solicitação de recuperação de senha no My Social para o usuário @${req.username}.`)}` : '#';
-                    const mailtoLink = req.email ? `mailto:${req.email}?subject=${encodeURIComponent('Recuperação de Senha - My Social')}&body=${encodeURIComponent(`Olá ${req.name},\n\nRecebemos sua solicitação de recuperação de senha para a conta @${req.username}.\n\n`)}` : '#';
+                    const mailtoLink = req.email ? `mailto:${req.email}?subject=${encodeURIComponent('[NO-REPLY] Recuperação de Conta e Credenciais - My Social')}&body=${encodeURIComponent(`Olá ${req.name},\n\nRecebemos sua solicitação de recuperação de senha para a conta @${req.username}.\n\n`)}` : '#';
                     
                     let dateStr = 'Data indisponível';
                     if (req.createdAt) {
@@ -6514,7 +6634,7 @@ My Social • Sua Sociedade Digital`;
                             </div>
                           </div>
 
-                          <div className="space-y-1.5 text-xs bg-black/50 p-2.5 rounded border border-emerald-950 mb-3">
+                          <div className="space-y-1.5 text-xs bg-black/50 p-2.5 rounded border border-emerald-950 mb-3 font-mono">
                             <div className="flex items-center gap-2 text-zinc-300">
                               <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                               <span className="text-zinc-500">Contato:</span>
@@ -6522,14 +6642,53 @@ My Social • Sua Sociedade Digital`;
                             </div>
                             <div className="flex items-center gap-2 text-zinc-300">
                               <Mail className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                              <span className="text-zinc-500">E-mail:</span>
+                              <span className="text-zinc-500">E-mail Solicitado:</span>
                               <span className="font-mono text-emerald-300 truncate">{req.email}</span>
                             </div>
+                            {matchedUser && (
+                              <div className="pt-1.5 border-t border-emerald-900/40 text-[11px] flex flex-col gap-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-zinc-500">E-mail no Cadastro:</span>
+                                  <span className="text-cyan-300 font-bold truncate max-w-[180px]">{matchedUser.email || 'Não cadastrado'}</span>
+                                </div>
+                                <div>
+                                  {emailMatches ? (
+                                    <span className="text-emerald-400 text-[10px] font-bold flex items-center gap-1">
+                                      <CheckCircle className="w-3 h-3 text-emerald-400" /> E-mail coincide com o cadastro oficial ✅
+                                    </span>
+                                  ) : matchedUser.email ? (
+                                    <span className="text-amber-400 text-[10px] font-bold flex items-center gap-1">
+                                      <AlertTriangle className="w-3 h-3 text-amber-400" /> E-mail diferente do cadastro oficial ⚠️
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
 
                         {/* Action buttons */}
                         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-950">
+                          {matchedUser && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEmailTemplateModalUser({
+                                  name: matchedUser.name || req.name,
+                                  username: matchedUser.username || req.username,
+                                  password: matchedUser.password || '',
+                                  role: matchedUser.role || 'Membro',
+                                  email: req.email || matchedUser.email || '',
+                                  contact: req.contact || ''
+                                });
+                              }}
+                              className="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/80 rounded text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+                              title="Gerar e-mail profissional no-reply com as credenciais para enviar"
+                            >
+                              <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                              <span>E-mail No-Reply</span>
+                            </button>
+                          )}
                           {cleanPhone && (
                             <a
                               href={waLink}
@@ -6647,6 +6806,27 @@ My Social • Sua Sociedade Digital`;
 
                     return (
                       <>
+                        {/* Current Group Exit Indicator if active */}
+                        {currentGroupId && (
+                          <div className="bg-amber-950/40 border border-amber-800/60 p-2 rounded flex items-center justify-between gap-2 mt-1">
+                            <span className="text-[10px] text-amber-300 font-bold truncate">
+                              Grupo ativo: {groups.find(g => g.id === currentGroupId)?.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCurrentGroupId(null);
+                                setCurrentTopic('Geral');
+                                setShowGroupsMenu(false);
+                              }}
+                              className="px-2 py-1 bg-amber-900/80 hover:bg-amber-800 text-amber-100 rounded text-[10px] font-bold shrink-0 flex items-center gap-1 transition-colors"
+                            >
+                              <LogOut className="w-3 h-3" />
+                              <span>Sair da visão do grupo</span>
+                            </button>
+                          </div>
+                        )}
+
                         {/* Meus Grupos Header */}
                         <div className="pt-3 pb-1 text-[10px] uppercase tracking-widest text-emerald-400 font-bold flex justify-between items-center border-t border-emerald-900/40 mt-2">
                           <span>Meus Grupos ({myJoinedGroups.length})</span>
@@ -6669,24 +6849,49 @@ My Social • Sua Sociedade Digital`;
                           myJoinedGroups.map(group => {
                             const isSelected = currentGroupId === group.id;
                             return (
-                              <button 
+                              <div 
                                 key={`my-${group.id}`}
-                                onClick={() => { setCurrentGroupId(group.id); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
-                                className={`w-full text-left p-3 rounded-sm border flex items-center gap-3 transition-all ${isSelected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black border-emerald-900/30 text-emerald-400 hover:bg-emerald-950/30'}`}
+                                className={`w-full text-left p-2.5 rounded-sm border flex items-center justify-between gap-2 transition-all ${isSelected ? 'bg-emerald-950/80 border-emerald-500 text-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black border-emerald-900/30 text-emerald-400 hover:bg-emerald-950/30'}`}
                               >
-                                <Users className="w-5 h-5 shrink-0 text-emerald-400 self-start mt-0.5" />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-bold text-sm flex items-center justify-between gap-1">
-                                    <span className="truncate">{group.name}</span>
-                                    <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1.5 py-0.2 rounded font-mono shrink-0">MEMBRO</span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setCurrentGroupId(group.id); setCurrentTopic('Geral'); setShowGroupsMenu(false); }}
+                                  className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
+                                >
+                                  <Users className="w-4 h-4 shrink-0 text-emerald-400 self-start mt-0.5" />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-xs flex items-center justify-between gap-1">
+                                      <span className="truncate">{group.name}</span>
+                                      <span className="text-[9px] bg-emerald-900/80 text-emerald-300 px-1 py-0.2 rounded font-mono shrink-0">MEMBRO</span>
+                                    </div>
+                                    <div className="text-[10px] opacity-70 flex items-center gap-2 mt-0.5 font-mono">
+                                      <span>{(group.members || []).length} membros</span>
+                                      <span>•</span>
+                                      <span className="truncate">Dono: @{group.owners?.[0] || 'admin'}</span>
+                                    </div>
                                   </div>
-                                  <div className="text-[10px] opacity-70 flex items-center gap-2 mt-0.5 font-mono">
-                                    <span>{(group.members || []).length} membros</span>
-                                    <span>•</span>
-                                    <span className="truncate">Dono: @{group.owners?.[0] || 'admin'}</span>
-                                  </div>
-                                </div>
-                              </button>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setConfirmModalState({
+                                      isOpen: true,
+                                      title: 'SAIR DO GRUPO',
+                                      message: `Tem certeza que deseja sair do grupo "${group.name}"?`,
+                                      isDestructive: true,
+                                      confirmText: 'SAIR DO GRUPO',
+                                      onConfirm: () => handleLeaveGroup(group.id)
+                                    });
+                                  }}
+                                  className="p-1.5 bg-amber-950/70 hover:bg-amber-900 border border-amber-800 text-amber-300 rounded text-[10px] font-bold transition-colors shrink-0 flex items-center gap-1"
+                                  title="Sair deste grupo"
+                                >
+                                  <LogOut className="w-3 h-3 text-amber-400" />
+                                  <span className="text-[10px]">Sair</span>
+                                </button>
+                              </div>
                             );
                           })
                         )}
@@ -6806,31 +7011,57 @@ My Social • Sua Sociedade Digital`;
                 </div>
               </div>
             ) : (
-              <button
-                onClick={() => setShowGroupTopicsModal(true)}
-                className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/60 hover:bg-emerald-900/40 border border-emerald-800/80 px-2 py-1 rounded-sm cursor-pointer transition-colors text-left"
-                title="Clique para ver os tópicos e gerenciar"
-              >
-                <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <span className="text-[9px] sm:text-[10px] text-emerald-500 uppercase font-bold hidden md:inline shrink-0">GRUPO:</span>
-                    <span className="font-extrabold text-[10px] sm:text-xs text-emerald-200 tracking-wider truncate">
-                      {groups.find(g => g.id === currentGroupId)?.name}
-                    </span>
-                    {currentGroupId && !groups.find(g => g.id === currentGroupId)?.members?.includes(currentUser?.username || '') && (
-                      <span className="bg-purple-950 border border-purple-500 text-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ml-1 shadow-[0_0_10px_rgba(168,85,247,0.5)]">
-                        <EyeOff className="w-3 h-3 text-purple-400 animate-pulse" />
-                        <span>MODO SIGILO</span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowGroupTopicsModal(true)}
+                  className="flex items-center gap-1.5 sm:gap-2 min-w-0 bg-emerald-950/60 hover:bg-emerald-900/40 border border-emerald-800/80 px-2 py-1 rounded-sm cursor-pointer transition-colors text-left"
+                  title="Clique para ver os tópicos e gerenciar"
+                >
+                  <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="text-[9px] sm:text-[10px] text-emerald-500 uppercase font-bold hidden md:inline shrink-0">GRUPO:</span>
+                      <span className="font-extrabold text-[10px] sm:text-xs text-emerald-200 tracking-wider truncate max-w-[120px] sm:max-w-[180px]">
+                        {groups.find(g => g.id === currentGroupId)?.name}
                       </span>
-                    )}
-                    <Hash className="w-3 h-3 text-emerald-400 shrink-0 ml-1 animate-pulse" />
+                      {currentGroupId && !groups.find(g => g.id === currentGroupId)?.members?.includes(currentUser?.username || '') && (
+                        <span className="bg-purple-950 border border-purple-500 text-purple-200 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shrink-0 ml-1 shadow-[0_0_10px_rgba(168,85,247,0.5)]">
+                          <EyeOff className="w-3 h-3 text-purple-400 animate-pulse" />
+                          <span>SIGILO</span>
+                        </span>
+                      )}
+                      <Hash className="w-3 h-3 text-emerald-400 shrink-0 ml-1 animate-pulse" />
+                    </div>
+                    <span className="text-[9px] sm:text-[10px] text-emerald-400 font-mono truncate">
+                      #{currentTopic || 'Geral'}
+                    </span>
                   </div>
-                  <span className="text-[9px] sm:text-[10px] text-emerald-400 font-mono truncate">
-                    #{currentTopic || 'Geral'}
-                  </span>
-                </div>
-              </button>
+                </button>
+
+                {/* Direct Exit / Leave group button in Header */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const grp = groups.find(g => g.id === currentGroupId);
+                    setConfirmModalState({
+                      isOpen: true,
+                      title: 'SAIR DO GRUPO',
+                      message: `Deseja sair do grupo "${grp?.name || 'atual'}" e retornar ao Chat Global?`,
+                      isDestructive: true,
+                      confirmText: 'SAIR DO GRUPO',
+                      onConfirm: () => {
+                        if (currentGroupId) handleLeaveGroup(currentGroupId);
+                      }
+                    });
+                  }}
+                  className="p-1 sm:px-2 sm:py-1 bg-amber-950/80 hover:bg-amber-900 border border-amber-800 text-amber-300 rounded text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-colors shrink-0 shadow-sm"
+                  title="Sair deste grupo e voltar ao Chat Global"
+                >
+                  <LogOut className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Sair do Grupo</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -7045,25 +7276,20 @@ My Social • Sua Sociedade Digital`;
                     {/* Leave Group option */}
                     {currentGroupId && (
                       <button
+                        type="button"
                         onClick={() => {
                           setShowHeaderAdminMenu(false);
+                          const grp = groups.find(g => g.id === currentGroupId);
                           setConfirmModalState({
-    isOpen: true,
-    title: 'SAIR DO GRUPO',
-    message: 'Tem certeza que deseja sair deste grupo?',
-    isDestructive: true,
-    confirmText: 'SAIR DO GRUPO',
-    onConfirm: async () => {
-      const currentGrp = groups.find(g => g.id === currentGroupId);
-      if (currentGrp) {
-        const newMembers = currentGrp.members.filter(m => m !== currentUser?.username);
-        const newOwners = currentGrp.owners.filter(o => o !== currentUser?.username);
-        await updateDoc(doc(db, 'groups', currentGrp.id), { members: newMembers, owners: newOwners });
-        setCurrentGroupId(null);
-        showAlert('Você saiu do grupo.', 'SAÍDA DE GRUPO', 'info');
-      }
-    }
-  });
+                            isOpen: true,
+                            title: 'SAIR DO GRUPO',
+                            message: `Tem certeza que deseja sair do grupo "${grp?.name || 'atual'}" e voltar ao Chat Global?`,
+                            isDestructive: true,
+                            confirmText: 'SAIR DO GRUPO',
+                            onConfirm: () => {
+                              if (currentGroupId) handleLeaveGroup(currentGroupId);
+                            }
+                          });
                         }}
                         className="w-full text-left px-2.5 py-2 rounded hover:bg-amber-950/60 text-amber-400 transition-colors flex items-center gap-2 font-bold border-t border-emerald-900/40 mt-1"
                       >
